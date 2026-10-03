@@ -78,6 +78,7 @@ export class App {
   private root: HTMLElement;
   private worker!: HostLike;
   private ready = false;
+  private partySig = '';
   private hello = false;
   private inline = false;
   private scenario!: ScenarioConfig;
@@ -208,7 +209,10 @@ export class App {
         this.map.settlementPop = msg.state.settlementPop;
         this.map.settlementProtest = msg.state.settlementProtest;
         this.map.setData(msg.positions, msg.values, msg.state.live);
-        if (this.lens === 'vote') this.applyLensPalette();
+        if (this.lens === 'vote') {
+          const sig = msg.state.S.parties.map((p) => p.name + p.color).join('|');
+          if (sig !== this.partySig) { this.partySig = sig; this.applyLensPalette(); }
+        }
         this.send({ type: 'ack' });
         this.onFrame();
         break;

@@ -315,15 +315,18 @@ export class PopulationMap {
       const pop = this.settlementPop[s] ?? 0;
       if (pr <= 0 || pop <= 0) continue;
       const share = pr / pop;
-      if (share < 0.004) continue;
+      const urbanSt = s < this.nCities;
+      if (share < (urbanSt ? 0.005 : 0.02) || pr < 3) continue;
       const st = this.settlements[s];
       const p = this.screenFromWorld(st.x, st.y);
-      const rad = Math.max(10, st.spread * k * 1.2);
+      const rad = Math.max(urbanSt ? 12 : 7, st.spread * k * 1.15);
       ctx.beginPath();
       ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255, 90, 60, ${Math.min(0.9, 0.25 + share * 12)})`;
-      ctx.lineWidth = 2 + Math.min(6, share * 60);
+      ctx.strokeStyle = `rgba(255, 96, 64, ${Math.min(0.7, 0.18 + share * 5)})`;
+      ctx.lineWidth = 1.25 + Math.min(2.5, share * 22);
+      ctx.setLineDash(urbanSt ? [] : [3, 3]);
       ctx.stroke();
+      ctx.setLineDash([]);
     }
     // settlement labels (cities always, villages when zoomed in)
     ctx.font = '500 11px "IBM Plex Sans", system-ui, sans-serif';

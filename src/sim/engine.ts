@@ -1158,7 +1158,7 @@ export class Simulation {
         this.addNews(`${l.name}, a ${LEADER_LABEL[l.style]}, gains a following${where}.`, 'people', 2);
       }
     } else {
-      this.addNews(`${sev}${spec.name.toLowerCase().startsWith('a ') ? spec.name : spec.name}${where}${who}${random ? '' : ' (scripted)'}.`, spec.category, spec.category === 'conflict' || spec.category === 'health' || intensity > 1.1 ? 2 : 1);
+      this.addNews(`${sev}${spec.name.toLowerCase().startsWith('a ') ? spec.name : spec.name}${where}${who}.`, spec.category, spec.category === 'conflict' || spec.category === 'health' || intensity > 1.1 ? 2 : 1);
     }
     if (spec.effects.war) {
       this.S.warActive = true;
