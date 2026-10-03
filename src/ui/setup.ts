@@ -127,7 +127,7 @@ export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onB
           h('section', { class: 'setup-sec' }, h('h2', {}, 'Where does history begin?'), h('p', { class: 'intro' }, 'Each starting point is only a set of slider values, so you can change everything afterwards. None of them is a real country: what happens next comes from the mechanisms, not from labels.'), cards),
           sec('Name and size', '',
             textInput('Society name', S.name, (v) => { S.name = v; }),
-            slider({ label: 'Population', min: 3, max: 6.7, step: 0.01, value: Math.log10(P.size), fmt: (v) => compact(Math.round(10 ** v)), help: 'Each dot is one person with a full life. Up to about 5 million in a desktop browser; 50k–300k runs fastest.', onInput: (v) => { P.size = Math.round(10 ** v); set(); } }),
+            slider({ label: 'Population', min: 3, max: 6.6, step: 0.01, value: Math.log10(P.size), fmt: (v) => compact(Math.round(10 ** v)), help: 'Each dot is one person with a full life. Up to about 4 million in a desktop browser; 50k–300k runs fastest.', onInput: (v) => { P.size = Math.round(10 ** v); set(); } }),
             numberInput('Start year', S.startYear, 1000, 2300, 1, (v) => { S.startYear = v; set(); }, 'Sets the calendar and the medical technology available in that era.'),
             numberInput('Random seed', S.seed, 1, 999999999, 1, (v) => { S.seed = v; }, 'Same seed + same settings = the same history. Change it to see another possible future.'),
           ),

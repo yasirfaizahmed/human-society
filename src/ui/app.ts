@@ -18,6 +18,39 @@ import { clear, cssVar, h, meter, numberInput, select, setMeter, slider, toast, 
 import { PopulationMap } from './map';
 import { openSetup } from './setup';
 import SimWorker from '../worker/sim.worker.ts?worker&inline';
+import { createSimHost } from '../worker/host';
+
+interface HostLike {
+  postMessage(msg: ToWorker, transfer?: Transferable[]): void;
+  terminate(): void;
+  onmessage: ((e: MessageEvent<FromWorker>) => void) | null;
+  onerror: ((e: ErrorEvent) => void) | null;
+}
+
+/** Runs the simulation on the main thread when Web Workers are unavailable (slower, but works). */
+class InlineHost implements HostLike {
+  onmessage: ((e: MessageEvent<FromWorker>) => void) | null = null;
+  onerror: ((e: ErrorEvent) => void) | null = null;
+  private dead = false;
+  private handle = createSimHost((msg) => {
+    if (!this.dead) setTimeout(() => this.onmessage?.({ data: msg } as MessageEvent<FromWorker>), 0);
+  });
+  postMessage(msg: ToWorker) {
+    setTimeout(() => { if (!this.dead) this.handle(msg); }, 0);
+  }
+  terminate() {
+    this.handle({ type: 'run', running: false, speed: 1 });
+    this.dead = true;
+  }
+}
+
+function spawnHost(): HostLike {
+  try {
+    return new SimWorker() as unknown as HostLike;
+  } catch {
+    return new InlineHost();
+  }
+}
 
 type Tab = 'overview' | 'charts' | 'events' | 'policy' | 'people' | 'forecast' | 'chronicle';
 const TABS: { id: Tab; label: string }[] = [
@@ -43,7 +76,10 @@ const KPI_KEYS = ['pop', 'gdppc', 'unemployment', 'lifeExp', 'tfr', 'happy', 'gr
 
 export class App {
   private root: HTMLElement;
-  private worker!: Worker;
+  private worker!: HostLike;
+  private ready = false;
+  private hello = false;
+  private inline = false;
   private scenario!: ScenarioConfig;
   private settlements: Settlement[] = [];
   private map!: PopulationMap;
@@ -63,7 +99,7 @@ export class App {
   private lastPanelUpdate = 0;
   private lastKpiUpdate = 0;
   private perf = { msPerTick: 0, ticksPerSecond: 0 };
-  private forecastWorker: Worker | null = null;
+  private forecastWorker: HostLike | null = null;
   private forecast: ForecastResult | null = null;
   private forecastProgress = '';
   private chartGroup = 'Population';
@@ -94,11 +130,31 @@ export class App {
     this.running = false;
     this.buildShell();
     this.worker?.terminate();
-    this.worker = new SimWorker();
-    this.worker.onmessage = (e: MessageEvent<FromWorker>) => this.onMessage(e.data);
-    this.worker.onerror = (e) => toast(`Simulation error: ${e.message}`);
-    this.send({ type: 'init', scenario });
+    this.ready = false;
+    this.hello = false;
+    this.launchHost(this.inline ? new InlineHost() : spawnHost());
+    // if the worker cannot start (blocked by the page's security policy), fall back to the main thread
+    setTimeout(() => {
+      if (!this.hello && !this.ready && !this.inline) this.fallBackToInline();
+    }, 3000);
+  }
+
+  private launchHost(host: HostLike) {
+    this.worker = host;
+    this.inline = host instanceof InlineHost;
+    host.onmessage = (e: MessageEvent<FromWorker>) => this.onMessage(e.data);
+    host.onerror = (e) => {
+      if (!this.ready && !this.inline) this.fallBackToInline();
+      else toast(`Simulation error: ${e.message}`);
+    };
+    this.send({ type: 'init', scenario: this.scenario });
     this.send({ type: 'lens', id: this.lens });
+  }
+
+  private fallBackToInline() {
+    this.worker.terminate();
+    toast('Background threads are unavailable here, so the simulation runs on the main thread (slower).');
+    this.launchHost(new InlineHost());
   }
 
   private send(msg: ToWorker) {
@@ -107,7 +163,11 @@ export class App {
 
   private onMessage(msg: FromWorker) {
     switch (msg.type) {
+      case 'hello':
+        this.hello = true;
+        break;
       case 'ready':
+        this.ready = true;
         this.settlements = msg.settlements;
         this.map.settlements = msg.settlements;
         this.map.nCities = msg.nCities;
@@ -159,7 +219,7 @@ export class App {
         break;
       case 'snapshot': {
         this.forecastWorker?.terminate();
-        this.forecastWorker = new SimWorker();
+        this.forecastWorker = this.inline ? new InlineHost() : spawnHost();
         this.forecastWorker.onmessage = (e: MessageEvent<FromWorker>) => this.onMessage(e.data);
         const transfer: Transferable[] = [msg.snap.friends.buffer as ArrayBuffer, ...Object.values(msg.snap.fields).map((v) => v.buffer as ArrayBuffer)];
         this.forecastWorker.postMessage({ type: 'runForecast', snap: msg.snap, request: msg.request } satisfies ToWorker, transfer);

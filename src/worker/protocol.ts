@@ -69,6 +69,7 @@ export type FromWorker =
       timeline: ScheduledEvent[];
     }
   | { type: 'picked'; slot: number }
+  | { type: 'hello' }
   | { type: 'snapshot'; snap: Snapshot; request: ForecastRequest }
   | { type: 'forecast-progress'; done: number; total: number }
   | { type: 'forecast-result'; result: ForecastResult }
