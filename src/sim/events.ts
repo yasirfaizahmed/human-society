@@ -455,7 +455,8 @@ export const TEMPLATES: EventSpec[] = [
     history: 'More than 480 coup attempts worldwide since 1950. They are most common in poor countries with a history of coups and an unpopular government.',
     refs: ['Powell & Thyne (2011), "Global Instances of Coups from 1950 to 2010", JPR'],
     effects: { fear: 0.3, itrust: -0.1, securityLoyalty: 0.2 },
-    baseRate: 0.015, likelihood: (s) => (s.democracy < 0.65 ? 1 : 0.08) * (1.4 - s.legitimacy) * 1.5 * (s.gdppc < 12000 ? 1.5 : 0.4) * (0.5 + s.military),
+    // Rich, consolidated democracies essentially never suffer coups (Przeworski et al. 2000)
+    baseRate: 0.015, likelihood: (s) => (s.democracy < 0.5 ? 1 : s.democracy < 0.7 ? 0.3 : 0.02) * (1.4 - s.legitimacy) * 1.5 * (s.gdppc < 12000 ? 1.5 : s.gdppc < 25000 ? 0.4 : 0.04) * (0.5 + s.military),
   },
   {
     id: 'theocraticRevolution', name: 'Clerical takeover', category: 'politics', duration: 24, shape: 'pulse', regime: 'theocracy',
@@ -484,7 +485,7 @@ export const TEMPLATES: EventSpec[] = [
     history: 'Venezuela after 1999, Hungary after 2010, Turkey after 2013. Elected autocrats rarely abolish elections outright.',
     refs: ['Levitsky & Ziblatt (2018), "How Democracies Die"', 'V-Dem Institute Democracy Reports'],
     effects: { democracy: -0.35, pressFreedom: -0.35, ruleOfLaw: -0.2, repression: 0.15, patriot: 0.04 },
-    baseRate: 0.01, likelihood: (s) => (s.democracy > 0.4 && s.democracy < 0.85 ? 1 : 0.2) * (s.auth > 0.55 ? 2 : 0.6) * (s.itrust < 0.4 ? 1.6 : 0.8),
+    baseRate: 0.01, likelihood: (s) => (s.democracy > 0.4 && s.democracy < 0.85 ? 1 : 0.2) * (s.auth > 0.55 ? 2 : 0.6) * (s.itrust < 0.4 ? 1.6 : 0.8) * (s.gdppc > 30000 && s.ruleOfLaw > 0.75 ? 0.3 : 1),
   },
   {
     id: 'electionFraud', name: 'Stolen election', category: 'politics', duration: 6, shape: 'decay',

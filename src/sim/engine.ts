@@ -1158,7 +1158,7 @@ export class Simulation {
         this.addNews(`${l.name}, a ${LEADER_LABEL[l.style]}, gains a following${where}.`, 'people', 2);
       }
     } else {
-      this.addNews(`${sev}${spec.name.toLowerCase().startsWith('a ') ? spec.name : spec.name}${where}${who}.`, spec.category, spec.category === 'conflict' || spec.category === 'health' || intensity > 1.1 ? 2 : 1);
+      this.addNews(`${sev}${spec.name.toLowerCase().startsWith('a ') ? spec.name : spec.name}${where}${who}.`, spec.category, spec.category === 'conflict' || spec.category === 'health' || spec.regime || intensity > 1.1 ? 2 : 1);
     }
     if (spec.effects.war) {
       this.S.warActive = true;
@@ -1627,9 +1627,11 @@ export class Simulation {
 
     // ---------------- psychology ----------------
     this.psychology(i, age, o, p, pov, approval, extNet, male);
+    if (!A.alive[i]) return;
 
     // ---------------- protest, crime, extremism ----------------
     if (age >= 15) this.civic(i, age, o, protNet, seedX, crimeX, male);
+    if (!A.alive[i]) return;
 
     // ---------------- family: bond, divorce, fertility ----------------
     if (p >= 0) this.partnership(i, p, pov);
@@ -3205,6 +3207,14 @@ export class Simulation {
     const frac = Math.min(1, maxPeople / Math.max(1, A.live));
     const pick = new Uint8Array(A.n);
     const rng = new RNG((this.t * 7919 + 13) | 0);
+    // influential people always come along, with their partners
+    for (const l of this.leaders) {
+      const s = l.alive ? A.deref(l.ref) : -1;
+      if (s < 0) continue;
+      pick[s] = 1;
+      const p = A.deref(A.partner[s]);
+      if (p >= 0) pick[p] = 1;
+    }
     for (let i = 0; i < A.n; i++) {
       if (!A.alive[i] || pick[i]) continue;
       if (rng.next() < frac) {
