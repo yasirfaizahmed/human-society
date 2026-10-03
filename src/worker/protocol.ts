@@ -42,7 +42,7 @@ export interface FrameState {
   live: number;
   popScale: number;
   latest: Record<string, number>;
-  S: Pick<SocietyState, 'democracy' | 'ruleOfLaw' | 'pressFreedom' | 'repression' | 'securityLoyalty' | 'marketFreedom' | 'taxRate' | 'progressivity' | 'welfare' | 'eduAccess' | 'healthSpend' | 'military' | 'policing' | 'genderEquality' | 'contraception' | 'minorityBias' | 'socialMedia' | 'collectivism' | 'religiousPolicy' | 'favoredFaith' | 'H' | 'legitimacy' | 'ruling' | 'regimeLabel' | 'trends' | 'politicsEndogenous' | 'parties' | 'govParties' | 'nextElection' | 'lastElection' | 'headLeader' | 'psi' | 'mmp' | 'emp' | 'sfd' | 'conflict' | 'warActive' | 'epiActive' | 'automation' | 'debtRatio' | 'protestFrac' | 'violentFrac'>;
+  S: Pick<SocietyState, 'democracy' | 'ruleOfLaw' | 'pressFreedom' | 'repression' | 'securityLoyalty' | 'marketFreedom' | 'taxRate' | 'progressivity' | 'welfare' | 'eduAccess' | 'healthSpend' | 'military' | 'policing' | 'genderEquality' | 'contraception' | 'minorityBias' | 'immigration' | 'socialMedia' | 'collectivism' | 'religiousPolicy' | 'favoredFaith' | 'H' | 'legitimacy' | 'ruling' | 'regimeLabel' | 'trends' | 'politicsEndogenous' | 'parties' | 'govParties' | 'nextElection' | 'lastElection' | 'headLeader' | 'psi' | 'mmp' | 'emp' | 'sfd' | 'conflict' | 'warActive' | 'epiActive' | 'automation' | 'debtRatio' | 'protestFrac' | 'violentFrac'>;
   faithShares: number[];
   faithStats: { relig: number; griev: number; toler: number; wealth: number; extremists: number }[];
   events: EventSummary[];

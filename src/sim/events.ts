@@ -279,7 +279,7 @@ export const TEMPLATES: EventSpec[] = [
     history: 'Market economies contract every 5–10 years. The US had 12 recessions between 1945 and 2020, with output falling about 2.5% on average.',
     refs: ['NBER Business Cycle Dating Committee', 'Romer & Romer (2019), "Fiscal Space and the Aftermath of Financial Crises"'],
     effects: { gdp: -4, unemployment: 2.5, griev: 0.06, mood: -0.08, fear: 0.04 },
-    baseRate: 0.11, likelihood: (s) => (s.agrarian > 0.6 ? 0.5 : 1) * (s.marketFreedom > 0.5 ? 1.2 : 0.8),
+    baseRate: 0.11, likelihood: (s) => (s.agrarian > 0.6 ? 0.25 : 1) * (s.marketFreedom > 0.5 ? 1.2 : 0.8),
   },
   {
     id: 'depression', name: 'Great Depression', category: 'economy', duration: 48, shape: 'hump',
@@ -287,7 +287,7 @@ export const TEMPLATES: EventSpec[] = [
     history: '1929–1933: US output fell about 27% and unemployment reached 25%. Where the depression lasted longer, far-right parties gained most, most famously in Germany.',
     refs: ['Romer (1993), "The Nation in Depression", JEP', 'de Bromhead, Eichengreen & O\'Rourke (2013), "Political Extremism in the 1920s and 1930s", JEH', 'Funke, Schularick & Trebesch (2016), "Going to Extremes", EER'],
     effects: { gdp: -27, unemployment: 18, wealthDestroyed: 30, griev: 0.3, fear: 0.18, itrust: -0.25, auth: 0.12, patriot: 0.06, extrem: 0.06, mood: -0.2, econ: -0.06 },
-    baseRate: 0.008, likelihood: (s) => (s.debtRatio > 1 ? 1.6 : 1) * (s.marketFreedom > 0.7 ? 1.4 : 1) * (s.gini > 0.45 ? 1.3 : 1),
+    baseRate: 0.008, likelihood: (s) => (s.debtRatio > 1 ? 1.6 : 1) * (s.marketFreedom > 0.7 ? 1.4 : 1) * (s.gini > 0.45 ? 1.3 : 1) * (s.agrarian > 0.5 ? 0.05 : 1 - s.agrarian),
   },
   {
     id: 'financialCrisis', name: 'Financial crisis', category: 'economy', duration: 30, shape: 'hump',
@@ -295,7 +295,7 @@ export const TEMPLATES: EventSpec[] = [
     history: '2008: global financial crisis. After systemic banking crises, unemployment rises about 7 points on average and populist parties gain about 30% more votes.',
     refs: ['Reinhart & Rogoff (2009), "This Time Is Different"', 'Funke, Schularick & Trebesch (2016), EER'],
     effects: { gdp: -6, unemployment: 5, wealthDestroyed: 15, itrust: -0.22, griev: 0.15, mood: -0.1, econ: -0.04 },
-    baseRate: 0.02, likelihood: (s) => (s.marketFreedom > 0.6 ? 1.5 : 0.7) * (s.debtRatio > 0.9 ? 1.4 : 1) * (s.gdppc > 10000 ? 1.2 : 0.8),
+    baseRate: 0.02, likelihood: (s) => (s.marketFreedom > 0.6 ? 1.5 : 0.7) * (s.debtRatio > 0.9 ? 1.4 : 1) * (s.gdppc > 10000 ? 1.2 : 0.8) * (1 - 0.95 * s.agrarian),
   },
   {
     id: 'hyperinflation', name: 'Hyperinflation', category: 'economy', duration: 20, shape: 'hump',
@@ -303,7 +303,7 @@ export const TEMPLATES: EventSpec[] = [
     history: 'Weimar Germany 1923 (prices doubled every 3.7 days at the peak), Zimbabwe 2008, Venezuela 2018. The impoverishment of the German middle class fed later support for extremists.',
     refs: ['Hanke & Krus (2012), "World Hyperinflations"', 'Fergusson (1975), "When Money Dies"'],
     effects: { inflation: 2500, gdp: -12, unemployment: 4, griev: 0.4, itrust: -0.45, fear: 0.15, auth: 0.15, extrem: 0.1, mood: -0.25 },
-    baseRate: 0.004, likelihood: (s) => (s.debtRatio > 1.2 ? 4 : 1) * 4 * (1 - s.ruleOfLaw) ** 2 * (s.atWar ? 2 : 1),
+    baseRate: 0.004, likelihood: (s) => (s.debtRatio > 1.2 ? 4 : 1) * 4 * (1 - s.ruleOfLaw) ** 2 * (s.atWar ? 2 : 1) * (s.year > 1910 ? 1 : 0.05),
   },
   {
     id: 'debtCrisis', name: 'Debt crisis & currency crash', category: 'economy', duration: 30, shape: 'hump',
@@ -311,7 +311,7 @@ export const TEMPLATES: EventSpec[] = [
     history: 'Mexico 1982 and 1994, Russia 1998, Argentina 2001, Greece 2010–15. In Greece output fell about 25%.',
     refs: ['Reinhart & Rogoff (2009)', 'IMF (2013), "Greece: Ex Post Evaluation"'],
     effects: { gdp: -12, inflation: 50, unemployment: 7, wealthDestroyed: 20, welfare: -0.15, itrust: -0.3, griev: 0.25, mood: -0.15 },
-    baseRate: 0.004, likelihood: (s) => (s.debtRatio > 1 ? 5 * s.debtRatio : 0.3),
+    baseRate: 0.004, likelihood: (s) => (s.debtRatio > 1 ? 5 * s.debtRatio : 0.3) * (s.year > 1820 ? 1 : 0.2),
   },
   {
     id: 'oilShock', name: 'Energy price shock', category: 'economy', duration: 24, shape: 'decay',
@@ -319,7 +319,7 @@ export const TEMPLATES: EventSpec[] = [
     history: 'The 1973 and 1979 oil shocks brought "stagflation"; the 2022 gas crisis followed in Europe.',
     refs: ['Hamilton (1983), "Oil and the Macroeconomy since World War II", JPE'],
     effects: { inflation: 12, gdp: -3, unemployment: 2, griev: 0.08, mood: -0.05 },
-    baseRate: 0.025,
+    baseRate: 0.025, likelihood: (s) => (s.year > 1900 ? 1 - 0.8 * s.agrarian : 0.03),
   },
   {
     id: 'foodPrices', name: 'Food price spike', category: 'economy', duration: 12, shape: 'hump',
@@ -335,7 +335,7 @@ export const TEMPLATES: EventSpec[] = [
     history: 'Post-war "golden age" 1950–73, the East Asian miracle, and China after 1978.',
     refs: ['Eichengreen (2007), "The European Economy since 1945"'],
     effects: { growth: 2.5, gdp: 6, unemployment: -2, mood: 0.08, consum: 0.08, itrust: 0.05 },
-    baseRate: 0.025,
+    baseRate: 0.025, likelihood: (s) => 1 - 0.7 * s.agrarian,
   },
   {
     id: 'resourceBoom', name: 'Oil / resource discovery', category: 'economy', duration: 120, shape: 'sustained',

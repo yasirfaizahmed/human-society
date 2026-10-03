@@ -81,7 +81,7 @@ function frameState(s: Simulation): FrameState {
       democracy: S.democracy, ruleOfLaw: S.ruleOfLaw, pressFreedom: S.pressFreedom, repression: S.repression, securityLoyalty: S.securityLoyalty,
       marketFreedom: S.marketFreedom, taxRate: S.taxRate, progressivity: S.progressivity, welfare: S.welfare, eduAccess: S.eduAccess,
       healthSpend: S.healthSpend, military: S.military, policing: S.policing, genderEquality: S.genderEquality, contraception: S.contraception,
-      minorityBias: S.minorityBias, socialMedia: S.socialMedia, collectivism: S.collectivism, religiousPolicy: S.religiousPolicy,
+      minorityBias: S.minorityBias, immigration: S.immigration, socialMedia: S.socialMedia, collectivism: S.collectivism, religiousPolicy: S.religiousPolicy,
       favoredFaith: S.favoredFaith, H: S.H, legitimacy: S.legitimacy, ruling: { ...S.ruling }, regimeLabel: S.regimeLabel, trends: { ...S.trends },
       politicsEndogenous: S.politicsEndogenous, parties: S.parties.map((p) => ({ ...p, pos: { ...p.pos } })), govParties: [...S.govParties],
       nextElection: S.nextElection, lastElection: S.lastElection, headLeader: S.headLeader, psi: S.psi, mmp: S.mmp, emp: S.emp, sfd: S.sfd,

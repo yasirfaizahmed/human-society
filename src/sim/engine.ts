@@ -105,6 +105,7 @@ export interface SocietyState {
   genderEquality: number;
   contraception: number;
   minorityBias: number;
+  immigration: number;
   socialMedia: number;
   collectivism: number;
   religiousPolicy: 'neutral' | 'favor' | 'theocracy' | 'suppress';
@@ -373,7 +374,7 @@ export class Simulation {
       securityLoyalty: Sc.securityLoyalty, marketFreedom: Sc.marketFreedom, taxRate: Sc.taxRate, progressivity: Sc.progressivity,
       welfare: Sc.welfare, eduAccess: Sc.eduAccess, healthSpend: Sc.healthSpend, military: Sc.military, policing: Sc.policing,
       genderEquality: Sc.genderEquality, contraception: clamp01(0.85 * dev + 0.2 * Sc.genderEquality),
-      minorityBias: Sc.minorityBias, socialMedia: Sc.socialMedia, collectivism: Sc.collectivism,
+      minorityBias: Sc.minorityBias, immigration: Sc.immigration ?? 0.4, socialMedia: Sc.socialMedia, collectivism: Sc.collectivism,
       religiousPolicy: Sc.religiousPolicy, favoredFaith: Sc.favoredFaith, H: 0.5, legitimacy: 0.5,
       ruling: { ...Sc.ruling }, regimeLabel: '', regimeSince: 0, trends: { ...Sc.trends }, politicsEndogenous: Sc.politicsEndogenous,
       parties: [], govParties: [], nextElection: 0, lastElection: null, headLeader: -1,
@@ -928,6 +929,17 @@ export class Simulation {
       this.startEvent(TEMPLATE_BY_ID.debtCrisis, 1, false);
       this.addNews('The state defaults on its debts. Creditors lose half their money.', 'economy', 2);
     }
+    // governments do not hoard: accumulated surpluses are spent on public goods over a few years
+    if (S.debt < 0) S.debt *= 0.985;
+    // immigrants are drawn to rich, peaceful, job-creating societies with open borders
+    const pull = clamp01((S.gdppc - 8000) / 40000) * (1 - Math.min(1, S.unemployment * 6)) * (S.conflict || S.warActive ? 0.2 : 1);
+    this.immigrantAcc += (pop * 0.012 * S.immigration * pull) / 12;
+    if (this.immigrantAcc >= 1) {
+      const k = Math.floor(this.immigrantAcc);
+      this.immigrantAcc -= k;
+      this.pendingMigrants += k;
+      if (!this.pendingMigrantProfile) this.pendingMigrantProfile = { faith: -2, religiosity: 0.65, education: Math.max(4, (this.latest.edu ?? 10) - 2), wealth: 0.25, strictness: 0.5, social: 0.4 };
+    }
     if (S.politicsEndogenous && S.debtRatio > 0.95) {
       S.taxRate = Math.min(0.55, S.taxRate + 0.0006);
       S.welfare = Math.max(0, S.welfare - 0.0008);
@@ -1136,7 +1148,8 @@ export class Simulation {
     this.events.push(ev);
     const where = target.settlement !== undefined && target.settlement >= 0 ? ` in ${this.world.settlements[target.settlement].name}` : '';
     const who = target.faith !== undefined ? ` (${this.cfg.population.faiths[target.faith].name})` : '';
-    const sev = intensity >= 1.25 ? 'Severe ' : intensity <= 0.6 ? 'Mild ' : '';
+    const positive = POSITIVE_EVENTS.has(spec.id);
+    const sev = intensity >= 1.25 ? (positive ? 'Major ' : 'Severe ') : intensity <= 0.6 ? (positive ? 'Modest ' : 'Mild ') : '';
     if (spec.regime) this.setRegime(spec.regime);
     if (spec.leader) {
       const l = this.spawnLeader(spec.leader, target, spec.duration);
@@ -1285,6 +1298,7 @@ export class Simulation {
   }
 
   private pendingMigrantProfile: MigrantProfile | null = null;
+  private immigrantAcc = 0;
 
   private seedInfection(frac: number) {
     const A = this.A;
@@ -1437,7 +1451,7 @@ export class Simulation {
     // epidemic
     const dis = A.disease[i];
     if (dis === DIS.I) {
-      const ifr = ifrAt(S.epiProfile, age) * this.ifrScale * (1.45 - 0.9 * H) * Math.exp(2 * (expH - A.health[i]));
+      const ifr = ifrAt(S.epiProfile, age) * this.ifrScale * (1.6 - 1.2 * H) * Math.exp(2 * (expH - A.health[i]));
       if (rng.next() < ifr) { this.die(i, DEATH.EPIDEMIC); return; }
       A.disease[i] = DIS.R;
       A.health[i] -= 0.05;
@@ -1624,7 +1638,7 @@ export class Simulation {
     // ---------------- urbanization ----------------
     if (!this.isUrbanHome(i) && age >= 16 && age < 40 && (o === OCC.UNEMPLOYED || o === OCC.LABORER || o === OCC.STUDENT || urbanX > 0)) {
       const U = this.latest.urban ?? 0.5;
-      const pu = (Math.max(0, this.ustar - U) * 0.35 + urbanX * 0.15) / 12;
+      const pu = (Math.max(0, this.ustar - U) * 0.35 + urbanX * 0.06) / 12;
       if (rng.next() < pu) {
         const st = this.world.pick(rng, 1);
         this.relocate(i, st, true);
@@ -2097,9 +2111,11 @@ export class Simulation {
       const youngMale = male && age < 36 ? 1 : 0;
       const need = 0.35 * A.griev[i] + 0.25 * Math.max(0, -A.esteem[i]) + 0.2 * isolation + 0.1 * youngMale + 0.15 * discrim + 0.1 * repressionFelt;
       const narrative = Math.max(A.strict[i] * A.relig[i] * (1 - A.toler[i]), A.patriot[i] * (1 - A.toler[i]) * 0.8, Math.abs(A.econ[i] - 0.5) * 2 * A.griev[i] * 0.6);
-      const net = extNet;
+      const net = Math.min(0.3, extNet);
+      const susceptible = (0.4 + 1.2 * (A.aggr[i] / 255)) * (1 - 0.5 * emp);
       const protective = 0.4 * emp + 0.2 * (Ag - 0.5) + 0.2 * (partnered && A.kids[i] > 0 ? 1 : 0) + 0.15 * (IS_EMPLOYED[o] ? 1 : 0) + 0.2 * A.toler[i];
-      let dr = 0.012 * need * (narrative + 0.6 * net) * (1 + 3 * net) - 0.003 * protective * A.extrem[i] - 0.0015 * Math.max(0, 0.5 - need);
+      let dr = 0.012 * susceptible * need * (narrative + 0.6 * net) * (1 + 3 * net) - 0.003 * protective * A.extrem[i] - 0.003 * Math.max(0, 0.5 - need);
+      if (A.extrem[i] > A.griev[i] + 0.35) dr -= 0.01;
       if (o === OCC.PRISONER) dr += 0.002 * net;
       const before = A.extrem[i];
       A.extrem[i] = clamp01(A.extrem[i] + dr);
@@ -2264,7 +2280,7 @@ export class Simulation {
     if (this.t - A.lastBirth[i] < 15) return;
     const partnerF = p >= 0 ? 1 : 0.02 + 0.2 * this.meanSocial * (1 - A.relig[i]);
     const childMort = Math.min(0.5, this.childMu * 4);
-    const desired = 1.25 + 2.3 * A.relig[i] + 0.9 * (0.5 - A.social[i]) - 0.06 * A.edu[i] + 3 * childMort + 0.5 * S.collectivism + 1.4 * S.agrarian;
+    const desired = 1.55 + 2.2 * A.relig[i] + 0.9 * (0.5 - A.social[i]) - 0.06 * A.edu[i] + 3 * childMort + 0.5 * S.collectivism + 1.4 * S.agrarian;
     const contra = S.contraception * (0.75 + 0.25 * Math.min(1, A.edu[i] / 12));
     // Bongaarts: births stop once the desired family size is reached, as far as contraception allows
     const want = A.kids[i] < Math.max(0, desired + (hash01(A.uid[i], 3) - 0.5)) ? 1 : Math.pow(1 - contra, 1.5);
@@ -2537,6 +2553,7 @@ export class Simulation {
       const k = Math.min(this.pendingMigrants, Math.ceil(A.live * 0.01) + 4096);
       this.spawnMigrants(k, this.pendingMigrantProfile);
       this.pendingMigrants = 0;
+      this.pendingMigrantProfile = null;
     }
     this.computeQuantiles(false);
     this.politics();
@@ -2636,7 +2653,14 @@ export class Simulation {
       const male = rng.next() < 0.55 ? 1 : 0;
       A.sex[s] = male;
       let f = prof && prof.faith >= 0 && prof.faith < this.K ? prof.faith : -1;
-      if (f < 0) { const r = rng.next(); let cum = 0; f = 0; for (let q = 0; q < this.K; q++) { cum += this.faithShareNow[q]; if (r <= cum) { f = q; break; } } }
+      if (f < 0) {
+        // -1: same mix as the population; -2: newcomers over-represent minority faiths
+        const w: number[] = [];
+        let tot = 0;
+        for (let q = 0; q < this.K; q++) { const v = this.faithShareNow[q] * (prof?.faith === -2 && this.isMinority(q) ? 3 : 1) + 0.001; w.push(v); tot += v; }
+        let r = rng.next() * tot; f = 0;
+        for (let q = 0; q < this.K; q++) { r -= w[q]; if (r <= 0) { f = q; break; } }
+      }
       A.faith[s] = f;
       const st = this.world.pick(rng, 0.85);
       A.home[s] = st;
@@ -2665,7 +2689,7 @@ export class Simulation {
       A.occ[s] = OCC.UNEMPLOYED;
       A.flags[s] = F.IMMIGRANT;
     }
-    if (count > 50) this.addNews(`${compactInt(count)} immigrants arrived this month.`, 'society', 1);
+    if (count > Math.max(50, A.live * 0.004)) this.addNews(`${compactInt(count * this.popScale)} immigrants arrived this month.`, 'society', 1);
   }
 
   // ---- politics: elections, protests, regime change ----
@@ -2744,8 +2768,8 @@ export class Simulation {
     if (leader) { leader.inPower = true; S.headLeader = leader.id; }
     S.securityLoyalty = 0.7;
     S.legitimacy = 0.65;
-    const label = kind === 'democratic' ? 'a democratic transition' : `a ${REGIMES[kind].label.toLowerCase()}`;
-    this.addNews(`REVOLUTION: the ${old.toLowerCase()} falls. ${leader ? `${leader.name} takes power and begins ${label}` : `The protesters' movement begins ${label}`}.`, 'politics', 3);
+    const next = kind === 'democratic' ? 'A democratic transition begins' : `New regime: ${REGIMES[kind].label.toLowerCase()}`;
+    this.addNews(`REVOLUTION: the ${old.toLowerCase()} falls. ${leader ? `${leader.name} takes power. ` : ''}${next}.`, 'politics', 3);
     // protesters go home, hope rises
     const A = this.A;
     for (let i = 0; i < A.n; i++) if (A.alive[i] && A.protest[i]) { A.protest[i] = 0; A.griev[i] *= 0.6; A.itrust[i] = clamp01(A.itrust[i] + 0.2); }
@@ -3350,6 +3374,8 @@ interface CompiledEffect {
 function newCompiled(target: Target): CompiledEffect {
   return { target, push: new Float32Array(PUSH_DIMS.length), mortality: 0, mortProfile: 0, emigration: 0, wealthLoss: 0, seed: 0, crime: 0, urban: 0, backlash: 0 };
 }
+
+const POSITIVE_EVENTS = new Set(['nationalTriumph', 'boom', 'resourceBoom', 'independence', 'reconciliation', 'civilRights', 'democratization', 'welfareExpansion', 'healthReform', 'educationReform', 'greenRevolution', 'industrialRevolution', 'printing', 'pill', 'reformMovement', 'religiousRevival', 'landReform', 'marketReform', 'laborMigration']);
 
 const LEADER_LABEL: Record<LeaderStyle, string> = {
   demagogue: 'fiery populist', reformer: 'liberal reformer', peacemaker: 'unifying peacemaker', spiritual: 'spiritual teacher',

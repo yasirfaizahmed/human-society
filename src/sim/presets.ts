@@ -31,7 +31,7 @@ export const PRESETS: Preset[] = [
         { name: 'Faith B', color: FAITH_COLORS[1], share: 0.08, religiosity: 0.72, strictness: 0.5, tolerance: 0.6 },
         { name: 'Non-religious', color: FAITH_COLORS[2], share: 0.42, religiosity: 0.05, strictness: 0.2, tolerance: 0.7, secular: true },
       ];
-      Object.assign(c, { name: 'Modern Republic', startYear: 2025, gdpPerCapita: 48000, techGrowth: 1.2, democracy: 0.85, ruleOfLaw: 0.8, pressFreedom: 0.82, repression: 0.08, securityLoyalty: 0.8, marketFreedom: 0.7, taxRate: 0.33, progressivity: 0.55, welfare: 0.55, eduAccess: 0.92, healthSpend: 0.75, military: 0.3, policing: 0.55, genderEquality: 0.85, religiousPolicy: 'neutral', minorityBias: 0.15, collectivism: 0.3, socialMedia: 0.85 });
+      Object.assign(c, { name: 'Modern Republic', startYear: 2025, gdpPerCapita: 48000, techGrowth: 1.2, democracy: 0.85, ruleOfLaw: 0.8, pressFreedom: 0.82, repression: 0.08, securityLoyalty: 0.8, marketFreedom: 0.7, taxRate: 0.33, progressivity: 0.55, welfare: 0.55, eduAccess: 0.92, healthSpend: 0.75, military: 0.3, policing: 0.55, genderEquality: 0.85, religiousPolicy: 'neutral', minorityBias: 0.15, immigration: 0.55, collectivism: 0.3, socialMedia: 0.85 });
       c.ruling = { social: 0.58, econ: 0.52, auth: 0.35, relig: 0.3, patriot: 0.5 };
       c.trends = { consumerism: 0.4, patriotism: 0, religiosity: 0, liberalism: 0.05, capitalism: 0.05, authority: 0, tolerance: 0 };
     },
@@ -49,7 +49,7 @@ export const PRESETS: Preset[] = [
         { name: 'Faith B', color: FAITH_COLORS[1], share: 0.12, religiosity: 0.85, strictness: 0.6, tolerance: 0.4 },
         { name: 'Non-religious', color: FAITH_COLORS[2], share: 0.02, religiosity: 0.1, strictness: 0.3, tolerance: 0.5, secular: true },
       ];
-      Object.assign(c, { name: 'Old Kingdom', startYear: 1800, gdpPerCapita: 1400, techGrowth: 0.15, democracy: 0.08, ruleOfLaw: 0.3, pressFreedom: 0.1, repression: 0.5, securityLoyalty: 0.75, marketFreedom: 0.4, taxRate: 0.1, progressivity: 0.05, welfare: 0.02, eduAccess: 0.12, healthSpend: 0.05, military: 0.5, policing: 0.3, genderEquality: 0.1, religiousPolicy: 'favor', favoredFaith: 0, minorityBias: 0.45, collectivism: 0.85, socialMedia: 0, electionYears: 5 });
+      Object.assign(c, { name: 'Old Kingdom', startYear: 1800, gdpPerCapita: 1400, techGrowth: 0.15, democracy: 0.08, ruleOfLaw: 0.3, pressFreedom: 0.1, repression: 0.5, securityLoyalty: 0.75, marketFreedom: 0.4, taxRate: 0.1, progressivity: 0.05, welfare: 0.02, eduAccess: 0.12, healthSpend: 0.05, military: 0.5, policing: 0.3, genderEquality: 0.1, religiousPolicy: 'favor', favoredFaith: 0, minorityBias: 0.45, immigration: 0.05, collectivism: 0.85, socialMedia: 0, electionYears: 5 });
       c.ruling = { social: 0.2, econ: 0.6, auth: 0.8, relig: 0.75, patriot: 0.75 };
       c.trends = { consumerism: 0, patriotism: 0.1, religiosity: 0.1, liberalism: 0, capitalism: 0, authority: 0.1, tolerance: 0 };
     },
@@ -124,7 +124,7 @@ export const PRESETS: Preset[] = [
         { name: 'Faith B', color: FAITH_COLORS[1], share: 0.06, religiosity: 0.7, strictness: 0.45, tolerance: 0.6 },
         { name: 'Non-religious', color: FAITH_COLORS[2], share: 0.34, religiosity: 0.04, strictness: 0.15, tolerance: 0.8, secular: true },
       ];
-      Object.assign(c, { name: 'Northern Commonwealth', startYear: 2025, gdpPerCapita: 58000, techGrowth: 1.3, democracy: 0.95, ruleOfLaw: 0.95, pressFreedom: 0.95, repression: 0.03, securityLoyalty: 0.85, marketFreedom: 0.7, taxRate: 0.42, progressivity: 0.65, welfare: 0.85, eduAccess: 0.95, healthSpend: 0.85, military: 0.25, policing: 0.5, genderEquality: 0.95, religiousPolicy: 'neutral', minorityBias: 0.1, collectivism: 0.35, socialMedia: 0.85 });
+      Object.assign(c, { name: 'Northern Commonwealth', startYear: 2025, gdpPerCapita: 58000, techGrowth: 1.3, democracy: 0.95, ruleOfLaw: 0.95, pressFreedom: 0.95, repression: 0.03, securityLoyalty: 0.85, marketFreedom: 0.7, taxRate: 0.42, progressivity: 0.65, welfare: 0.85, eduAccess: 0.95, healthSpend: 0.85, military: 0.25, policing: 0.5, genderEquality: 0.95, religiousPolicy: 'neutral', minorityBias: 0.1, immigration: 0.5, collectivism: 0.35, socialMedia: 0.85 });
       c.ruling = { social: 0.72, econ: 0.42, auth: 0.25, relig: 0.2, patriot: 0.45 };
       c.trends = { consumerism: 0.2, patriotism: 0, religiosity: 0, liberalism: 0.05, capitalism: 0, authority: 0, tolerance: 0.1 };
     },

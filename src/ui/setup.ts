@@ -233,6 +233,7 @@ export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onB
               ? select('Favoured faith', P.faiths.map((f, i) => ({ value: String(i), label: f.name })), String(S.favoredFaith), (v) => { S.favoredFaith = Number(v); })
               : null,
             slider({ label: 'Discrimination against minorities', min: 0, max: 1, step: 0.01, value: S.minorityBias, fmt: f2, onInput: (v) => { S.minorityBias = v; } }),
+            slider({ label: 'Openness to immigrants', min: 0, max: 1, step: 0.01, value: S.immigration ?? 0.4, fmt: f2, low: 'Closed', high: 'Open', help: 'Rich, peaceful societies with jobs attract newcomers; this sets how many may come.', onInput: (v) => { S.immigration = v; } }),
             numberInput('Years between elections', S.electionYears, 2, 10, 1, (v) => { S.electionYears = v; }),
             toggle('Rulers set policy themselves', S.politicsEndogenous, (v) => { S.politicsEndogenous = v; }, 'On: elected governments and regimes move taxes, welfare, the press and repression toward their own ideology. Off: your sliders stay in charge.'),
           ),

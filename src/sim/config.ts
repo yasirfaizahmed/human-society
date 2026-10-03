@@ -105,6 +105,8 @@ export interface SocietyConfig {
   favoredFaith: number;
   /** Social discrimination against minority faith groups. */
   minorityBias: number;
+  /** How open borders are to immigrants (0 = closed, 1 = very open). Rich, peaceful societies attract more. */
+  immigration: number;
   /** 0 = individualist, 1 = collectivist: weight of family/community approval. */
   collectivism: number;
   /** Share of people on algorithmic social media. */
@@ -199,6 +201,7 @@ export function defaultSociety(): SocietyConfig {
     religiousPolicy: 'neutral',
     favoredFaith: 0,
     minorityBias: 0.2,
+    immigration: 0.4,
     collectivism: 0.45,
     socialMedia: 0.6,
     trends: { consumerism: 0.3, patriotism: 0, religiosity: 0, liberalism: 0, capitalism: 0, authority: 0, tolerance: 0 },

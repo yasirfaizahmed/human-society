@@ -907,6 +907,7 @@ export class App {
         add('genderEquality', 'Gender equality', 'Patriarchal', 'Equal', (st) => S(st).genderEquality),
         add('contraception', 'Access to contraception', 'None', 'Universal', (st) => S(st).contraception),
         add('minorityBias', 'Discrimination against minorities', 'None', 'Severe', (st) => S(st).minorityBias),
+        add('immigration', 'Openness to immigrants', 'Closed', 'Open', (st) => S(st).immigration),
         add('collectivism', 'Collectivism', 'Individualist', 'Collectivist', (st) => S(st).collectivism),
         add('socialMedia', 'Social media use', 'None', 'Everyone', (st) => S(st).socialMedia, { fmt: (v) => `${Math.round(v * 100)}%` }),
         select('State and religion', [
