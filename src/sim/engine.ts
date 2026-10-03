@@ -1997,7 +1997,7 @@ export class Simulation {
             A.consum[i] -= 0.002 * ch * A.consum[i]; A.mental[i] += 0.002 * ch; break;
           case 'extremist': {
             const ag = (this.t - A.birth[i]) / 12;
-            if (ag >= 15 && ag <= 35 && A.griev[i] > 0.25) A.extrem[i] += 0.02 * ch * A.griev[i] * (1.2 - A.emp[i] / 255);
+            if (ag >= 15 && ag <= 38 && A.griev[i] > 0.25) A.extrem[i] = clamp01(A.extrem[i] + 0.07 * ch * A.griev[i] * (1.2 - A.emp[i] / 255) * (A.sex[i] ? 1.3 : 0.6) * (1 - 0.5 * A.toler[i]));
             break;
           }
           case 'revolutionary': A.griev[i] += 0.001 * ch; break;
@@ -2099,7 +2099,7 @@ export class Simulation {
       const narrative = Math.max(A.strict[i] * A.relig[i] * (1 - A.toler[i]), A.patriot[i] * (1 - A.toler[i]) * 0.8, Math.abs(A.econ[i] - 0.5) * 2 * A.griev[i] * 0.6);
       const net = extNet;
       const protective = 0.4 * emp + 0.2 * (Ag - 0.5) + 0.2 * (partnered && A.kids[i] > 0 ? 1 : 0) + 0.15 * (IS_EMPLOYED[o] ? 1 : 0) + 0.2 * A.toler[i];
-      let dr = 0.009 * need * (narrative + 0.5 * net) * (1 + 2 * net) - 0.004 * protective * A.extrem[i] - 0.0015 * Math.max(0, 0.55 - need);
+      let dr = 0.012 * need * (narrative + 0.6 * net) * (1 + 3 * net) - 0.003 * protective * A.extrem[i] - 0.0015 * Math.max(0, 0.5 - need);
       if (o === OCC.PRISONER) dr += 0.002 * net;
       const before = A.extrem[i];
       A.extrem[i] = clamp01(A.extrem[i] + dr);
@@ -2125,7 +2125,8 @@ export class Simulation {
           const risk = 0.4 * A.fear[i] + 0.15 * (A.N[i] / 255) + 0.3 * this.repEff;
           // Granovetter thresholds: a spread of personal thresholds, a few near zero (activists)
           const personal = 0.5 * (hash01(A.uid[i], 21) - 0.5);
-          const theta = clamp(0.12 + personal - 1.5 * motive + 0.5 * risk + 0.15 * A.auth[i] * (1 - misalign) - 0.05 * (A.E[i] / 255), 0.002, 0.95);
+          const fatigue = 0.025 * Math.min(12, S.protestMonths);
+          const theta = clamp(0.12 + personal - 1.5 * motive + 0.5 * risk + 0.15 * A.auth[i] * (1 - misalign) - 0.05 * (A.E[i] / 255) + fatigue, 0.002, 0.95);
           const cn = this.cN[c];
           const local = cn > 0 ? this.cProtest[c] / cn : 0;
           const fEff = 0.5 * local + 0.3 * Math.min(1, this.globalProtest * this.visibility * 3) + 0.2 * Math.min(1, protNet);
@@ -2135,7 +2136,7 @@ export class Simulation {
           }
         }
       } else {
-        const exit = 0.25 + 0.6 * Math.max(0, -motive) + 0.3 * A.fear[i] * (1 - A.extrem[i]);
+        const exit = 0.25 + 0.6 * Math.max(0, -motive) + 0.3 * A.fear[i] * (1 - A.extrem[i]) + 0.04 * Math.min(12, S.protestMonths);
         if (rng.next() < exit) A.protest[i] = 0;
         else {
           if (A.protest[i] === PROTEST.PEACEFUL && (A.extrem[i] > 0.5 || (A.aggr[i] > 165 && this.repEff > 0.2)) && rng.next() < 0.1) A.protest[i] = PROTEST.VIOLENT;
@@ -2165,7 +2166,7 @@ export class Simulation {
     if (A.extrem[i] > 0.8 && A.aggr[i] > 120 && age >= 16 && age < 46) {
       const pt = 0.0012 * ((A.extrem[i] - 0.8) / 0.2) * (1 - 0.6 * this.policingEff);
       if (rng.next() < pt) this.terrorAttack(i);
-      else if (rng.next() < 0.01 * this.policingEff) { A.occ[i] = OCC.PRISONER; this.log(i, 'Was arrested by security services.'); }
+      else if (rng.next() < 0.025 * this.policingEff * (0.5 + S.ruleOfLaw)) { A.occ[i] = OCC.PRISONER; this.log(i, 'Was arrested by security services.'); }
     }
   }
 

@@ -360,6 +360,9 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   .grid2 { grid-template-columns: minmax(0, 1fr); }
   .topbar { gap: 8px 12px; }
 }
+@media (max-width: 620px) {
+  .perf { display: none; }
+}
 @media (max-width: 520px) {
   .grid4 { grid-template-columns: minmax(0, 1fr); }
   .glance { grid-template-columns: minmax(0, 1fr); }

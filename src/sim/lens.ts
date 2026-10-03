@@ -103,7 +103,7 @@ export function lensPalette(id: string, cats?: string[]): Uint8Array {
   if (def.kind === 'categorical') {
     const colors = cats ?? (id === 'occupation' ? OCC_COLORS : id === 'protest' ? PROTEST_COLORS : id === 'love' ? LOVE_COLORS : id === 'disease' ? DISEASE_COLORS : CAT);
     for (let i = 1; i < 256; i++) put(i, hexToRgb(colors[(i - 1) % colors.length]));
-    if (id === 'protest' || id === 'disease') put(1, hexToRgb(colors[0]), 110);
+    if (id === 'protest' || id === 'disease') put(1, hexToRgb(colors[0]), 150);
   } else {
     const stops = id === 'extrem' || id === 'griev' || id === 'fear' ? HEAT_STOPS : def.kind === 'diverging' ? DIV_STOPS : SEQ_STOPS;
     for (let i = 1; i < 256; i++) put(i, rampAt(stops, (i - 1) / 254));

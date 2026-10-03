@@ -69,6 +69,8 @@ export class App {
   private chartGroup = 'Population';
   private customSeries: string[] = ['happy', 'itrust', 'toler'];
   private newsFilter = 'all';
+  private fcReq: ForecastRequest = { years: 25, runs: 10, sample: 12000, randomEvents: true, intervention: null };
+  private fcIntervention = { id: '', intensity: 1, target: {} as Target };
   // dom refs
   private els: Record<string, HTMLElement> = {};
   private panelBody!: HTMLElement;
@@ -991,10 +993,9 @@ export class App {
   // ---------- Forecast ----------
   private forecastPanel() {
     const el = h('div', { class: 'pane' });
-    const req: ForecastRequest = { years: 25, runs: 10, sample: 12000, randomEvents: true, intervention: null };
-    let ivId = '';
-    let ivIntensity = 1;
-    const ivTarget: Target = {};
+    const req = this.fcReq;
+    const iv = this.fcIntervention;
+    const ivTarget = iv.target;
     let metric = 'democracy';
     const status = h('p', { class: 'muted', 'aria-live': 'polite' });
     const results = h('div', {});
@@ -1006,13 +1007,13 @@ export class App {
         slider({ label: 'Years ahead', min: 5, max: 80, step: 1, value: req.years, onInput: (v) => { req.years = v; } }),
         slider({ label: 'Number of futures', min: 4, max: 40, step: 1, value: req.runs, onInput: (v) => { req.runs = v; } }),
         slider({ label: 'People per future', min: 3000, max: 60000, step: 1000, value: req.sample, fmt: (v) => compact(v), help: 'A representative sample (families kept together). More people = less noise, slower.', onInput: (v) => { req.sample = v; } }),
-        toggle('Random events in the futures', true, (v) => { req.randomEvents = v; }),
+        toggle('Random events in the futures', req.randomEvents, (v) => { req.randomEvents = v; }),
       ),
-      select('What if…', ivOpts, '', (v) => { ivId = v; }),
-      slider({ label: 'Intervention intensity', min: 0.2, max: 2.5, step: 0.1, value: 1, fmt: (v) => `${v.toFixed(1)}×`, onInput: (v) => { ivIntensity = v; } }),
+      select('What if…', ivOpts, iv.id, (v) => { iv.id = v; }),
+      slider({ label: 'Intervention intensity', min: 0.2, max: 2.5, step: 0.1, value: iv.intensity, fmt: (v) => `${v.toFixed(1)}×`, onInput: (v) => { iv.intensity = v; } }),
       this.targetControls(ivTarget),
       h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => {
-        req.intervention = ivId ? { templateId: ivId, intensity: ivIntensity, target: cleanTarget(ivTarget) } : null;
+        req.intervention = iv.id ? { templateId: iv.id, intensity: iv.intensity, target: cleanTarget(ivTarget) } : null;
         this.forecast = null;
         this.forecastProgress = 'Copying the society…';
         this.send({ type: 'forecast', request: { ...req } });
