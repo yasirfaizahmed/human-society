@@ -10,7 +10,8 @@
     "build:single": "tsc --noEmit && vite build --mode single",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "headless": "tsx scripts/headless.ts"
+    "headless": "tsx scripts/headless.ts",
+    "sweep": "tsx scripts/sweep.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

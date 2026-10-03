@@ -30,6 +30,7 @@ Other commands:
 | `npm run build:single` | One self-contained HTML file in `dist-single/` (works offline) |
 | `npm run typecheck` | TypeScript checks |
 | `npm run headless -- <preset> <people> <years> <seed>` | Run without the UI and print yearly indicators, e.g. `npm run headless -- fragileDemocracy 20000 30 4` |
+| `npm run sweep -- [preset\|all] [people] [years] [seeds]` | Robustness sweep over presets and seeds: ranges of key indicators, NaN checks, headline events |
 
 The simulation runs in a Web Worker, so the page stays responsive. People are drawn with WebGL2 as
 GPU point sprites (one draw call for millions of dots), with a CPU fallback if WebGL2 is missing.
@@ -154,3 +155,15 @@ src/ui/         the app: WebGL map, charts, setup screen, panels, styles
 scripts/        headless runner for experiments and calibration
 docs/MODEL.md   the model, mechanism by mechanism, with references
 ```
+
+## Roadmap ideas
+
+- **Multi-core simulation**: split people across several workers with `SharedArrayBuffer` (needs a
+  cross-origin-isolated host) for 3–4× faster million-person runs; or move the continuous updates
+  (moods, opinions, health) to WebGPU compute.
+- **Several countries**: trade, migration and war between simulated societies.
+- **Calibration against data**: fit parameters to World Values Survey, World Bank and V-Dem
+  series, and back-test historical episodes.
+- **Scenario sharing**: save and load scenarios and timelines as files or links.
+- **Richer institutions**: courts, a parliament with seats, local government, unions, religious
+  institutions as organizations.
