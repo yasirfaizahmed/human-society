@@ -607,14 +607,67 @@ export class Simulation {
         }
       }
     }
+    // ---- birth histories: each woman gets the births she would have had by now under today's
+    // conditions and the simulation's own rules (partnering by age, postponement, birth control,
+    // desired size, the post-birth gap); the real children are then given mothers whose history has a
+    // birth at that time. The population starts in step with its own dynamics: no artificial baby
+    // boom or bust in the first years, and mothers of the right age ----
+    const K = P.faiths.length;
+    const HIST_YEARS = 32;
+    const births: number[][] = Array.from({ length: K * HIST_YEARS }, () => []);
+    const histK = new Uint8Array(A.n);
+    const settled = clamp01(0.6 + 0.3 * coll - 0.25 * (P.socialValues - 0.4));
+    for (let w = 0; w < A.n; w++) {
+      if (!A.alive[w] || A.sex[w] === 1) continue;
+      const age = -A.birth[w] / 12;
+      if (age < 15) continue;
+      const strictRelig = A.strict[w] * A.relig[w];
+      const ready = 15 + 0.75 * Math.min(16, A.edu[w]) * (1 - 0.5 * strictRelig);
+      const delayAge = Math.min(32, 18 + (1.3 * Math.max(0, A.edu[w] - 8) + 3 * dev) * (1 - 0.6 * strictRelig));
+      const threshold = Math.max(0, this.desiredFamilySize(w) - hash01(A.uid[w], 3));
+      const contra = this.contraUse(w);
+      const single = 0.02 + 0.2 * P.socialValues * (1 - A.relig[w]);
+      const months = Math.round((Math.min(age, 50) - 15) * 12);
+      let k = 0, gap = 0;
+      for (let m = 0; m < months; m++) {
+        if (gap > 0) { gap--; continue; }
+        const a = 15 + m / 12;
+        const pPartner = a < ready ? 0.12 + 0.2 * coll : settled * Math.min(1, 0.55 + 0.09 * (a - ready));
+        const want = k < threshold ? 1 - 0.4 * contra : Math.pow(1 - contra, 1.5);
+        const delay = a < delayAge ? 1 - contra * 0.85 : 1;
+        const pYear = 0.62 * FERTILITY_SHAPE[Math.min(6, ((a - 15) / 5) | 0)] * want * delay * (pPartner + (1 - pPartner) * single);
+        if (rng.next() < pYear / 12) {
+          k++;
+          gap = 15;
+          const ago = Math.floor(age - a);
+          if (ago < HIST_YEARS) births[A.faith[w] * HIST_YEARS + ago].push(w);
+        }
+      }
+      histK[w] = Math.min(12, k);
+    }
+    /** A mother for someone born `ago` years ago: a woman of that faith with a birth then (if any is left). */
+    const claimMother = (f: number, ago: number): number => {
+      for (const d of [0, 1, -1, 2, -2]) {
+        const y = ago + d;
+        if (y < 0 || y >= HIST_YEARS) continue;
+        const list = births[f * HIST_YEARS + y];
+        if (!list.length) continue;
+        const idx = rng.int(list.length);
+        const m = list[idx];
+        list[idx] = list[list.length - 1];
+        list.pop();
+        return m;
+      }
+      return -1;
+    };
     // ---- children → mothers ----
     const womenByAge: number[][] = adultsByAge.map((list) => list.filter((s) => A.sex[s] === 0));
     const womenByAgeFaith: number[][][] = P.faiths.map((_, f) => womenByAge.map((list) => list.filter((s) => A.faith[s] === f)));
     for (const c of children) {
       const ca = (-A.birth[c]) / 12;
-      let mother = -1;
+      let mother = claimMother(A.faith[c], Math.floor(ca));
+      // more children than the histories account for: a woman of a plausible age
       for (let tries = 0; tries < 14 && mother < 0; tries++) {
-        // mothers are older where women study longer
         const ma = Math.round(ca + 18 + 4 * dev + rng.next() * 17);
         if (ma > 100) continue;
         // prefer a mother of the child's own faith (keeps each group's age structure)
@@ -628,34 +681,15 @@ export class Simulation {
       this.linkChild(c, mother, true);
     }
     // young adults also have living parents (not co-resident)
-    for (let a = 18; a < 32; a++) {
+    for (let a = 18; a < HIST_YEARS; a++) {
       for (const s of adultsByAge[a]) {
         if (rng.next() > 0.75) continue;
-        const ma = Math.round(a + 20 + rng.next() * 16);
-        if (ma > 100) continue;
-        const list = womenByAge[ma];
-        if (!list.length) continue;
-        const m = list[rng.int(list.length)];
-        if (A.kids[m] >= 7 || A.faith[m] !== A.faith[s]) continue;
-        this.linkChild(s, m, false);
+        const m = claimMother(A.faith[s], a);
+        if (m >= 0 && A.alive[m] && -A.birth[m] / 12 - a <= 50) this.linkChild(s, m, false);
       }
     }
-    // ---- children already born: grown-up children who left home are not linked above, so women
-    // also get the births they would have had by now with the simulation's own timing (marriage age,
-    // schooling, desired family size); this avoids a baby boom in the first simulated years ----
-    for (let w = 0; w < A.n; w++) {
-      if (!A.alive[w] || A.sex[w] === 1) continue;
-      const age = -A.birth[w] / 12;
-      if (age < 15) continue;
-      const sr = 1 - 0.5 * A.strict[w] * A.relig[w];
-      const ready = 15 + 0.75 * Math.min(16, A.edu[w]) * sr;
-      const delay = Math.min(32, 18 + (1.3 * Math.max(0, A.edu[w] - 8) + 3 * dev) * (1 - 0.6 * A.strict[w] * A.relig[w]));
-      const start = Math.max(ready, delay) + 1.5;
-      const partnered = A.partner[w] >= 0;
-      const target = Math.min(this.desiredFamilySize(w), Math.max(0, (Math.min(age, 45) - start) / 4)) * (partnered || age > 40 ? 1 : 0.3);
-      const k = Math.min(12, Math.floor(target + rng.next()));
-      if (k > A.kids[w]) A.kids[w] = k;
-    }
+    // grown-up children who left home are not linked: the history gives the full count
+    for (let w = 0; w < A.n; w++) if (histK[w] > A.kids[w]) A.kids[w] = histK[w];
     // ---- wealth: lognormal with requested inequality, scaled by occupation ----
     const sigma = Math.SQRT2 * invNormCdf((clamp(P.wealthInequality, 0.2, 0.95) + 1) / 2);
     let wsum = 0, nAdults = 0;
@@ -2545,6 +2579,16 @@ export class Simulation {
     return fp > 0 && d > 1.6 ? 1.6 + (d - 1.6) * (1 - 0.75 * Math.min(1, fp)) : d;
   }
 
+  /**
+   * A woman's use of birth control: rises with schooling; doctrines against it hold back the devout and
+   * strict (and pronatalist groups use less of it); family-planning programmes reach the unschooled too
+   * (Bangladesh, India's sterilisation drives).
+   */
+  private contraUse(i: number): number {
+    const A = this.A;
+    return Math.min(1, this.S.contraception * (0.45 + 0.55 * Math.min(1, A.edu[i] / 12)) * (1 - 0.3 * A.strict[i] * A.relig[i]) * (1 - 0.15 * Math.max(0, this.fFert[A.faith[i]])) + 0.3 * this.cfg.society.familyPlanning);
+  }
+
   private fertility(i: number, age: number, p: number) {
     const A = this.A;
     const S = this.S;
@@ -2552,10 +2596,7 @@ export class Simulation {
     if (this.t - A.lastBirth[i] < 15) return;
     const partnerF = p >= 0 ? 1 : 0.02 + 0.2 * this.meanSocial * (1 - A.relig[i]);
     const desired = this.desiredFamilySize(i);
-    // use of birth control rises with schooling; doctrines against it hold back the devout and strict;
-    // family-planning programmes reach the unschooled too (Bangladesh, India's sterilisation drives)
-    // (and pronatalist groups use less of it)
-    const contra = Math.min(1, S.contraception * (0.45 + 0.55 * Math.min(1, A.edu[i] / 12)) * (1 - 0.3 * A.strict[i] * A.relig[i]) * (1 - 0.15 * Math.max(0, this.fFert[A.faith[i]])) + 0.3 * this.cfg.society.familyPlanning);
+    const contra = this.contraUse(i);
     // Bongaarts: births stop once the desired family size is reached, as far as contraception
     // allows (the personal threshold desired − U(0,1) makes completed families average `desired`);
     // before that, some couples use birth control to space births

@@ -454,10 +454,13 @@ locked scenario that starts in 2026. Every setting is one of:
   health, set to the level their simulated living conditions sustain.
 - **Estimate** or **default** where no comparable figure exists (marked as such).
 
-The starting population uses the real age pyramid; women start with the number of children they
-would already have had with the model's own timing, mothers of babies and toddlers start inside the
-post-birth gap, and couples form at the model's own marriage ages, so the first years show no
-artificial baby boom or bust. Hybrid regimes (democracy 0.3–0.5) hold elections that favour
+The starting population uses the real age pyramid. Each woman gets a birth history generated with
+the simulation's own rules under today's conditions (partnering by age, postponement with schooling,
+birth control, desired family size, the post-birth gap), and the real children are given mothers
+whose history has a birth in their birth year; mothers of babies and toddlers therefore start inside
+the post-birth gap. Couples form at the model's own marriage ages. The population starts in step
+with its own dynamics, so the first years show no artificial baby boom or bust (this applies to
+every scenario, not only real countries). Hybrid regimes (democracy 0.3–0.5) hold elections that favour
 incumbents, following *competitive authoritarianism* (Levitsky & Way 2010).
 
 Two rules keep long projections from drifting away from the measured start for model reasons:
