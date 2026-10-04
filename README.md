@@ -69,7 +69,8 @@ families kept together), so they stay fast whatever the main population is.
   (V-Dem 2025, Freedom House 2026), who governs and their positions (V-Party), values, trust, social
   media use, taxes, welfare and military spending. Each setting shows its source and whether it is
   measured, derived by a stated formula, calibrated (tuned so the simulation reproduces the
-  country's observed fertility, life expectancy, schooling, growth and migration), an estimate,
+  country's observed fertility, life expectancy, schooling, growth and migration, and, for India,
+  Israel, the UK, Germany, France and the US, the surveyed fertility gaps between faith groups), an estimate,
   or a neutral default where no comparable figure exists. These settings cannot be edited; you
   choose only how many people to simulate, the random seed, and whether random events happen,
   and you can still script events and change policy once it runs. For long projections, today's

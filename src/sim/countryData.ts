@@ -43,6 +43,8 @@ export interface CountryRaw {
   lastCoup: number | null;
   faiths: { profile: string; share: number; name?: string }[];
   faithSource: string;
+  /** Children per woman by faith group, where a survey reports it; calibrated as ratios to the reference group(s). */
+  groupFertility: { ref: string[]; tfr: Record<string, number>; src: string } | null;
 }
 
 export const COUNTRY_DATA_DATE = '2026-10-04';
@@ -63,6 +65,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0.5, src: "UN World Population Policies: policy to lower fertility; National Family Planning Programme since 1952" }, institutionalTrust: { v: 0.82, src: "Gallup World Poll 2023: 82% confident in the national government" }, lastCoup: null,
     faiths: [{ profile: "hindu_india", share: 79.4 }, { profile: "muslim_south_asia", share: 15.2 }, { profile: "christian_south_asia", share: 2.3 }, { profile: "sikh", share: 1.7 }, { profile: "buddhist_sea", share: 0.7 }],
     faithSource: "Pew Research Center 2025, \"How the Global Religious Landscape Changed From 2010 to 2020\" (2020 shares); Sikh and Buddhist shares from the 2011 census",
+    groupFertility: { ref: ["hindu_india"], tfr: { hindu_india: 1.94, muslim_south_asia: 2.36, christian_south_asia: 1.88, sikh: 1.61, buddhist_sea: 1.39 }, src: "National Family Health Survey (NFHS-5), 2019–21: children per woman by religion (national 2.0)" },
   },
   {
     id: "pakistan", name: "Pakistan", iso: "PAK",
@@ -79,6 +82,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0.4, src: "UN World Population Policies: policy to lower fertility; Population Welfare Programme" }, institutionalTrust: null, lastCoup: 1999,
     faiths: [{ profile: "muslim_south_asia", share: 96.35 }, { profile: "hindu_minority_south_asia", share: 1.61 }, { profile: "christian_south_asia", share: 1.37 }],
     faithSource: "Pakistan Bureau of Statistics, 7th Population and Housing Census 2023",
+    groupFertility: null,
   },
   {
     id: "bangladesh", name: "Bangladesh", iso: "BGD",
@@ -95,6 +99,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0.6, src: "UN World Population Policies: policy to lower fertility; one of the strongest family-planning programmes since the 1970s" }, institutionalTrust: null, lastCoup: 2007,
     faiths: [{ profile: "muslim_south_asia", share: 91.04 }, { profile: "hindu_minority_south_asia", share: 7.95 }, { profile: "buddhist_sea", share: 0.61 }, { profile: "christian_south_asia", share: 0.3 }],
     faithSource: "Bangladesh Bureau of Statistics, Population and Housing Census 2022",
+    groupFertility: null,
   },
   {
     id: "indonesia", name: "Indonesia", iso: "IDN",
@@ -111,6 +116,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0.6, src: "UN World Population Policies; national family-planning agency BKKBN since 1970" }, institutionalTrust: null, lastCoup: null,
     faiths: [{ profile: "muslim_sea", share: 87.1 }, { profile: "christian_sea", share: 10.5, name: "Christians (Protestant & Catholic)" }, { profile: "hindu_bali", share: 1.7 }, { profile: "buddhist_eastasia", share: 0.7 }],
     faithSource: "Indonesia Ministry of Home Affairs (Dukcapil) population register 2023",
+    groupFertility: null,
   },
   {
     id: "nigeria", name: "Nigeria", iso: "NGA",
@@ -127,6 +133,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0.2, src: "UN World Population Policies: policy to lower fertility; modern contraceptive use ≈12% (NDHS 2023–24)" }, institutionalTrust: { v: 0.25, src: "Gallup World Poll 2022: about a quarter confident in the national government" }, lastCoup: 1993,
     faiths: [{ profile: "muslim_west_africa", share: 56.1 }, { profile: "christian_africa", share: 43.4 }, { profile: "folk_african", share: 0.5 }],
     faithSource: "Pew Research Center 2025 (2020 estimates, based on the Nigeria DHS)",
+    groupFertility: null,
   },
   {
     id: "egypt", name: "Egypt", iso: "EGY",
@@ -143,6 +150,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0.4, src: "UN World Population Policies: policy to lower fertility; national family-planning programme" }, institutionalTrust: null, lastCoup: 2013,
     faiths: [{ profile: "muslim_mena", share: 94.9 }, { profile: "christian_mena", share: 5.1, name: "Christians (mostly Coptic)" }],
     faithSource: "Pew Research Center 2025 (2020 estimates); Coptic Church estimates are higher (≈10%)",
+    groupFertility: null,
   },
   {
     id: "turkey", name: "Türkiye", iso: "TUR",
@@ -159,6 +167,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0, src: "Pronatalist policy (2025 declared the Year of the Family): no programme to lower fertility" }, institutionalTrust: null, lastCoup: 1980,
     faiths: [{ profile: "muslim_turkey", share: 95.0 }, { profile: "none_muslim_world", share: 4.5 }, { profile: "christian_mena", share: 0.3 }],
     faithSource: "Pew Research Center 2025 religious-switching survey (95% of adults Muslim, most of the rest unaffiliated)",
+    groupFertility: null,
   },
   {
     id: "usa", name: "United States", iso: "USA",
@@ -175,6 +184,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0, src: "No national policy to lower fertility" }, institutionalTrust: { v: 0.22, src: "Pew Research Center 2024: 22% trust the federal government most of the time" }, lastCoup: null,
     faiths: [{ profile: "evangelical", share: 23, name: "Evangelical Protestants" }, { profile: "christian_us", share: 38, name: "Other Christians (Catholic, mainline, Black Protestant…)" }, { profile: "none_west", share: 29, name: "Religiously unaffiliated" }, { profile: "jewish_diaspora", share: 2 }, { profile: "muslim_us", share: 1 }, { profile: "hindu_diaspora", share: 1 }, { profile: "buddhist_eastasia", share: 1 }],
     faithSource: "Pew Research Center Religious Landscape Study 2023–24",
+    groupFertility: { ref: ["none_west"], tfr: { none_west: 1.6, evangelical: 1.9, christian_us: 1.9 }, src: "Pew Research Center 2022, \"Modeling the Future of Religion in America\" (2020–25): Christian women 1.9, religiously unaffiliated 1.6" },
   },
   {
     id: "uk", name: "United Kingdom", iso: "GBR",
@@ -191,6 +201,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0, src: "No national policy to lower fertility" }, institutionalTrust: { v: 0.27, src: "OECD Trust Survey 2024: ≈27% trust the national government" }, lastCoup: null,
     faiths: [{ profile: "christian_weurope", share: 49.4 }, { profile: "none_west", share: 40.3 }, { profile: "muslim_europe", share: 6.4 }, { profile: "hindu_diaspora", share: 1.7 }, { profile: "sikh", share: 0.9 }, { profile: "jewish_diaspora", share: 0.5 }, { profile: "buddhist_eastasia", share: 0.5 }],
     faithSource: "Censuses 2021 (England & Wales, Northern Ireland) and 2022 (Scotland), excluding \"not stated\"",
+    groupFertility: { ref: ["christian_weurope", "none_west"], tfr: { christian_weurope: 1.8, none_west: 1.8, muslim_europe: 2.9 }, src: "Pew Research Center 2017, \"Europe's Growing Muslim Population\" (2015–20): Muslim women 2.9, non-Muslim women 1.8" },
   },
   {
     id: "germany", name: "Germany", iso: "DEU",
@@ -207,6 +218,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0, src: "No national policy to lower fertility" }, institutionalTrust: { v: 0.39, src: "OECD Trust Survey 2024: ≈39% trust the national government" }, lastCoup: null,
     faiths: [{ profile: "christian_weurope", share: 48.5 }, { profile: "none_west", share: 44.6 }, { profile: "muslim_europe", share: 6.6 }, { profile: "jewish_diaspora", share: 0.15 }],
     faithSource: "German Bishops' Conference and EKD membership statistics 2024; BAMF study on Muslims (5.3–5.6 million); fowid",
+    groupFertility: { ref: ["christian_weurope", "none_west"], tfr: { christian_weurope: 1.4, none_west: 1.4, muslim_europe: 1.9 }, src: "Pew Research Center 2017, \"Europe's Growing Muslim Population\" (2015–20): Muslim women 1.9, non-Muslim women 1.4" },
   },
   {
     id: "france", name: "France", iso: "FRA",
@@ -223,6 +235,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0, src: "No national policy to lower fertility" }, institutionalTrust: { v: 0.29, src: "OECD Trust Survey 2024: ≈29% trust the national government" }, lastCoup: null,
     faiths: [{ profile: "christian_weurope", share: 46 }, { profile: "none_west", share: 43 }, { profile: "muslim_europe", share: 9 }, { profile: "jewish_diaspora", share: 0.6 }, { profile: "buddhist_eastasia", share: 0.5 }],
     faithSource: "Pew Research Center 2025 (2020 estimates)",
+    groupFertility: { ref: ["christian_weurope", "none_west"], tfr: { christian_weurope: 1.9, none_west: 1.9, muslim_europe: 2.9 }, src: "Pew Research Center 2017, \"Europe's Growing Muslim Population\" (2015–20): Muslim women 2.9, non-Muslim women 1.9" },
   },
   {
     id: "israel", name: "Israel", iso: "ISR",
@@ -239,6 +252,7 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0, src: "Pronatalist policy: no programme to lower fertility" }, institutionalTrust: null, lastCoup: null,
     faiths: [{ profile: "jewish_israel", share: 61.5, name: "Jews (non-Haredi)" }, { profile: "jewish_orthodox", share: 14.3, name: "Haredi Jews" }, { profile: "muslim_mena", share: 18.4, name: "Muslims" }, { profile: "christian_mena", share: 2.0 }, { profile: "druze", share: 1.6 }, { profile: "none_west", share: 2.2, name: "No religion recorded" }],
     faithSource: "Israel Central Bureau of Statistics, end of 2025 (Jews & others 78.3%, Arabs 21.7%); Haredi share 14.3% (Israel Democracy Institute)",
+    groupFertility: { ref: ["jewish_israel"], tfr: { jewish_israel: 2.2, jewish_orthodox: 6.5, muslim_mena: 2.75, christian_mena: 1.61, druze: 1.66, none_west: 1.13 }, src: "Haredi (6.5) and other Jewish women (2.2): Israel Democracy Institute, Statistical Report on Ultra-Orthodox Society 2024 (2021–23); Muslim, Christian, Druze and no religion: Israel Central Bureau of Statistics 2024" },
   },
   {
     id: "brazil", name: "Brazil", iso: "BRA",
@@ -255,5 +269,6 @@ export const COUNTRIES: CountryRaw[] = [
     familyPlanning: { v: 0, src: "No national policy to lower fertility" }, institutionalTrust: null, lastCoup: 1964,
     faiths: [{ profile: "catholic_latam", share: 56.7 }, { profile: "evangelical", share: 26.9, name: "Evangelicals" }, { profile: "none_west", share: 9.3, name: "No religion" }, { profile: "spiritist_brazil", share: 2.8 }],
     faithSource: "IBGE, Census 2022 religion results (published June 2025), people aged 10+",
+    groupFertility: null,
   },
 ];

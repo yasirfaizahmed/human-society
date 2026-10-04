@@ -411,7 +411,9 @@ function dataSheet(name: string, id: string, rows: SheetRow[]): HTMLElement {
     h('div', { class: 'kind-legend' }, ...(Object.keys(KIND_LABEL) as DataKind[]).map((k) => h('span', { class: `kind kind-${k}`, title: KIND_HELP[k] }, KIND_LABEL[k]))),
   );
   const fit = COUNTRY_FIT[id];
-  const r = countryScenario(id, 10000).targets;
+  const built = countryScenario(id, 10000);
+  const r = built.targets;
+  const nameOf = (profile: string) => built.scenario.population.faiths.find((f) => f.profile === profile)?.name ?? profile;
   if (fit?.achieved) {
     const a = fit.achieved;
     const line = (label: string, real: string, sim: string) => h('div', { class: 'gl' }, h('span', { class: 'muted' }, label), h('b', {}, `${real} · simulated ${sim}`));
@@ -424,6 +426,8 @@ function dataSheet(name: string, id: string, rows: SheetRow[]): HTMLElement {
         line('Schooling, adults 25+', r.meanSchooling.toFixed(1), a.meanSchooling.toFixed(1)),
         line('Growth per person', `${r.gdpGrowthPerPerson.toFixed(1)}%`, `${a.gdpGrowthPerPerson.toFixed(1)}%`),
         line('Net migration per 1,000', r.netMigration.toFixed(1), a.netMigration.toFixed(1)),
+        ...r.groups.filter((g) => a.groupRatio?.[g.profile] !== undefined).map((g) =>
+          line(`Fertility, ${nameOf(g.profile)} vs ${r.groupRef.map(nameOf).join(' & ')}`, `${g.ratio.toFixed(2)}×`, `${a.groupRatio![g.profile].toFixed(2)}×`)),
       ),
     ));
   }

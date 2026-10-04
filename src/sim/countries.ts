@@ -32,7 +32,14 @@ export interface CountryTargets {
   urban: number;
   gdpGrowthPerPerson: number;
   netMigration: number;
+  /** Faith groups whose fertility is calibrated: their children per woman relative to the reference group(s). */
+  groups: { profile: string; ratio: number }[];
+  /** The reference groups for those ratios. */
+  groupRef: string[];
 }
+
+/** Only groups this large are calibrated (smaller ones are too few in a sample for a stable rate). */
+const MIN_GROUP_SHARE = 1.5;
 
 export const REAL_DATA_DATE = COUNTRY_DATA_DATE;
 
@@ -65,7 +72,25 @@ export function countryTargets(c: CountryRaw): CountryTargets {
     urban: c.urban / 100,
     gdpGrowthPerPerson: c.growth - c.popGrowth,
     netMigration: c.netMigration,
+    groups: groupTargets(c),
+    groupRef: c.groupFertility?.ref ?? [],
   };
+}
+
+/** Each surveyed group's children per woman relative to the (share-weighted) reference group(s). */
+function groupTargets(c: CountryRaw): { profile: string; ratio: number }[] {
+  const g = c.groupFertility;
+  if (!g) return [];
+  let refT = 0, refW = 0;
+  for (const p of g.ref) {
+    const share = c.faiths.find((f) => f.profile === p)?.share ?? 0;
+    refT += share * (g.tfr[p] ?? 0);
+    refW += share;
+  }
+  const ref = refT / Math.max(1e-9, refW);
+  return c.faiths
+    .filter((f) => !g.ref.includes(f.profile) && g.tfr[f.profile] !== undefined && f.share >= MIN_GROUP_SHARE)
+    .map((f) => ({ profile: f.profile, ratio: g.tfr[f.profile] / ref }));
 }
 
 /** Starting values for the fitted settings before calibration has been run. */
@@ -136,6 +161,27 @@ export function countryScenario(id: string, size: number): { scenario: ScenarioC
   for (const g of c.faiths) {
     const f = P.faiths.find((x) => x.profile === g.profile)!;
     row('Faith', f.name, pct(g.share, g.share < 1 ? 2 : 1), c.faithSource, 'measured', `profile: ${FAITH_PROFILE_BY_ID[g.profile].tradition}, ${FAITH_PROFILE_BY_ID[g.profile].context}; devotion ${f2(f.religiosity)}`);
+  }
+  // fertility by group: calibrated where a survey reports it, otherwise the tradition's tendency
+  const gf = c.groupFertility;
+  const calibrated = new Set(countryTargets(c).groups.map((x) => x.profile));
+  for (const f of P.faiths) {
+    const fitted = fit.groupFertility?.[f.profile ?? ''];
+    if (fitted !== undefined && calibrated.has(f.profile ?? '')) f.fertility = fitted;
+  }
+  if (gf) {
+    const refNames = gf.ref.map((p) => P.faiths.find((x) => x.profile === p)?.name ?? p).join(' and ');
+    for (const f of P.faiths) {
+      const t = gf.tfr[f.profile ?? ''];
+      if (t === undefined) continue;
+      const isRef = gf.ref.includes(f.profile ?? '');
+      const tend = f.fertility ?? 0;
+      const tendStr = `${tend >= 0 ? '+' : ''}${tend.toFixed(2)}`;
+      row('Faith', `Children per woman: ${f.name}`, t.toFixed(2), gf.src, isRef ? 'measured' : calibrated.has(f.profile ?? '') ? 'fitted' : 'measured',
+        isRef ? 'reference group for the ratios below'
+          : calibrated.has(f.profile ?? '') ? `family-size tendency ${tendStr}, calibrated so the group keeps this ratio to ${refNames}`
+          : `group too small in a sample to calibrate; family-size tendency of its tradition (${tendStr})`);
+    }
   }
   row('Faith', 'Religion "very important"', pct(c.religionImportant.v), c.religionImportant.src, c.religionImportant.src.startsWith('Derived') ? 'derived' : 'measured',
     `average devotion ${f2(relTarget)} (0.1 + 0.85 × share); each group keeps its tradition's relative devotion`);

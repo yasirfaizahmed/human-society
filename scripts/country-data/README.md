@@ -18,9 +18,12 @@
 3. `build.py` combines both into `src/sim/countryData.ts`.
 
 Then `npm run fit-countries` calibrates the few settings that have no direct measure (family-size
-norm, health access, schooling of young adults, productivity growth, migration openness) so the
-simulation reproduces each country's observed fertility, life expectancy, schooling, growth and
-net migration, and writes `src/sim/countryFit.ts`.
+norm, health access, schooling of young adults, extra growth above the model's own, migration
+openness, starting health, and the family-size tendency of faith groups with surveyed fertility)
+so the simulation reproduces each country's observed fertility, life expectancy, schooling,
+growth, net migration and fertility gaps between groups, and writes `src/sim/countryFit.ts`.
+A single country can be fitted with `npm run fit-countries -- india 60000 10` (people, iterations).
+The fit takes one to a few minutes per country.
 
 To refresh: update `manual.py` (and the year in `extract.py` if needed), run
 `python3 scripts/country-data/extract.py`, `python3 scripts/country-data/build.py`, then

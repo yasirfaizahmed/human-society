@@ -450,8 +450,14 @@ locked scenario that starts in 2026. Every setting is one of:
   when needed, birth-control use differing from what income predicts) for the fertility rate; health
   access (and, for countries such as Nigeria, an endemic-disease burden) for life expectancy; young
   adults' schooling for adult mean schooling; extra growth above the model's own for IMF growth per
-  person; openness to immigrants or the emigration rate for UN net migration; and people's starting
-  health, set to the level their simulated living conditions sustain.
+  person; openness to immigrants or the emigration rate for UN net migration; people's starting
+  health, set to the level their simulated living conditions sustain; and, where a survey reports
+  fertility by religion, each group's family-size tendency, so its children per woman keep the
+  surveyed ratio to the reference group (India: NFHS-5 2019–21; Israel: Central Bureau of
+  Statistics 2024 and the Israel Democracy Institute for Haredi women; UK, Germany, France: Pew
+  2017 for 2015–20; USA: Pew 2022 for 2020–25). Ratios rather than levels are used because these
+  surveys are from different years than the national 2026 figure. Elsewhere group differences come
+  from the traditions' profiles and the groups' measured religiosity, schooling and wealth.
 - **Estimate** or **default** where no comparable figure exists (marked as such).
 
 The starting population uses the real age pyramid. Each woman gets a birth history generated with

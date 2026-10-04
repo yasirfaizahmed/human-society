@@ -2586,7 +2586,7 @@ export class Simulation {
    */
   private contraUse(i: number): number {
     const A = this.A;
-    return Math.min(1, this.S.contraception * (0.45 + 0.55 * Math.min(1, A.edu[i] / 12)) * (1 - 0.3 * A.strict[i] * A.relig[i]) * (1 - 0.15 * Math.max(0, this.fFert[A.faith[i]])) + 0.3 * this.cfg.society.familyPlanning);
+    return Math.min(1, this.S.contraception * (0.45 + 0.55 * Math.min(1, A.edu[i] / 12)) * (1 - 0.3 * A.strict[i] * A.relig[i]) * Math.max(0, 1 - 0.15 * Math.max(0, this.fFert[A.faith[i]])) + 0.3 * this.cfg.society.familyPlanning);
   }
 
   private fertility(i: number, age: number, p: number) {

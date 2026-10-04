@@ -6,6 +6,7 @@
 import { writeFileSync } from 'node:fs';
 import { countryScenario, realCountries } from '../src/sim/countries';
 import type { CountryFit } from '../src/sim/countryFit';
+import { FAITH_PROFILE_BY_ID } from '../src/sim/faiths';
 import { COUNTRY_FIT } from '../src/sim/countryFit';
 import { Simulation, expectedHealth } from '../src/sim/engine';
 
@@ -17,10 +18,17 @@ const YEARS = 5;
 const BURN_IN = 1;
 const SEEDS = [11, 23, 37];
 
-interface Measured { tfr: number; lifeExp: number; meanSchooling: number; gdpGrowthPerPerson: number; netMigration: number; medianAge: number; healthRatio: number }
+interface Measured {
+  tfr: number; lifeExp: number; meanSchooling: number; gdpGrowthPerPerson: number; netMigration: number; medianAge: number; healthRatio: number;
+  /** Children per woman by faith profile, and of the reference group(s) for the group ratios. */
+  group: Record<string, number>; refTfr: number;
+}
 
 function measure(id: string, fit: CountryFit): Measured {
-  const acc = { tfr: 0, lifeExp: 0, meanSchooling: 0, gdpGrowthPerPerson: 0, netMigration: 0, medianAge: 0, healthRatio: 0 };
+  const acc: Measured = { tfr: 0, lifeExp: 0, meanSchooling: 0, gdpGrowthPerPerson: 0, netMigration: 0, medianAge: 0, healthRatio: 0, group: {}, refTfr: 0 };
+  const { targets } = countryScenario(id, 1000);
+  const gSum: Record<string, number> = {}, gN: Record<string, number> = {};
+  let refSum = 0, refN = 0;
   for (const seed of SEEDS) {
     COUNTRY_FIT[id] = fit;
     const { scenario } = countryScenario(id, people);
@@ -36,6 +44,16 @@ function measure(id: string, fit: CountryFit): Measured {
       for (let m = 0; m < 12; m++) sim.tick();
       tfr += sim.latest.tfr / YEARS;
       le += sim.latest.lifeExp / YEARS;
+      // fertility by group (women-weighted for the reference groups)
+      let rT = 0, rW = 0;
+      scenario.population.faiths.forEach((fg, f) => {
+        const v = sim.faithTFR[f];
+        if (!Number.isFinite(v)) return;
+        const p = fg.profile ?? '';
+        gSum[p] = (gSum[p] ?? 0) + v; gN[p] = (gN[p] ?? 0) + 1;
+        if (targets.groupRef.includes(p)) { rT += v * sim.faithShareNow[f]; rW += sim.faithShareNow[f]; }
+      });
+      if (rW > 0) { refSum += rT / rW; refN++; }
       let inn = 0, out = 0;
       for (let f = 0; f < sim.K; f++) { inn += sim.flowsLast[f * 6 + 4]; out += sim.flowsLast[f * 6 + 5]; }
       net += ((inn - out) / Math.max(1, sim.A.live)) * 1000 / YEARS;
@@ -54,6 +72,8 @@ function measure(id: string, fit: CountryFit): Measured {
     }
     acc.healthRatio += hr / Math.max(1, n) / SEEDS.length;
   }
+  for (const p of Object.keys(gSum)) acc.group[p] = gSum[p] / gN[p];
+  acc.refTfr = refN ? refSum / refN : NaN;
   return acc;
 }
 
@@ -97,6 +117,17 @@ function fitCountry(id: string): CountryFit {
     fit.healthSpend = Math.max(0, Math.min(1, z));
     fit.diseaseBurden = z < 0 ? Math.min(0.5, -z * 0.35) : 0;
     fit.growthMomentum = Math.max(-6, Math.min(14, fit.growthMomentum + (targets.gdpGrowthPerPerson - m.gdpGrowthPerPerson) / 0.8));
+    // fertility of surveyed faith groups, as ratios to the reference group(s)
+    if (targets.groups.length && Number.isFinite(m.refTfr)) {
+      const gfit: Record<string, number> = { ...(fit.groupFertility ?? {}) };
+      for (const g of targets.groups) {
+        const cur = gfit[g.profile] ?? FAITH_PROFILE_BY_ID[g.profile].fertility;
+        const sim = m.group[g.profile];
+        // (a shrinking step averages out the sampling noise of small groups)
+        if (Number.isFinite(sim)) gfit[g.profile] = Math.max(-2.5, Math.min(8, cur + (0.9 / (1 + it / 3)) * (m.refTfr * g.ratio - sim)));
+      }
+      fit.groupFertility = gfit;
+    }
     // start people at the health their conditions sustain (health/age-norm 1 ↔ setting 0.75)
     fit.startHealth = Math.max(0.2, Math.min(1, fit.startHealth * Math.pow(m.healthRatio / startRatio(id, fit), 0.8)));
     if (targets.netMigration > 0) {
@@ -108,14 +139,19 @@ function fitCountry(id: string): CountryFit {
     }
     m = measure(id, fit);
     const r = (v: number) => v.toFixed(2);
-    console.error(`${id} #${it + 1} [norm ${fit.fertilityNorm.toFixed(2)} contra ${(fit.contraceptionShift ?? 0).toFixed(2)} health ${fit.healthSpend.toFixed(2)} disease ${(fit.diseaseBurden ?? 0).toFixed(2)}]: TFR ${r(m.tfr)}/${r(targets.tfr)} · life ${r(m.lifeExp)}/${r(targets.lifeExp)} · growth ${r(m.gdpGrowthPerPerson)}/${r(targets.gdpGrowthPerPerson)} · migration ${r(m.netMigration)}/${r(targets.netMigration)} · school ${r(m.meanSchooling)}/${r(targets.meanSchooling)}`);
+    const gl = targets.groups.map((g) => `${g.profile} ${(m.group[g.profile] / m.refTfr).toFixed(2)}/${g.ratio.toFixed(2)}`).join(' ');
+    console.error(`${id} #${it + 1} [norm ${fit.fertilityNorm.toFixed(2)} contra ${(fit.contraceptionShift ?? 0).toFixed(2)} health ${fit.healthSpend.toFixed(2)} disease ${(fit.diseaseBurden ?? 0).toFixed(2)}]: TFR ${r(m.tfr)}/${r(targets.tfr)} · life ${r(m.lifeExp)}/${r(targets.lifeExp)} · growth ${r(m.gdpGrowthPerPerson)}/${r(targets.gdpGrowthPerPerson)} · migration ${r(m.netMigration)}/${r(targets.netMigration)} · school ${r(m.meanSchooling)}/${r(targets.meanSchooling)}${gl ? ' · groups ' + gl : ''}`);
   }
   const round = (v: number, d = 3) => Math.round(v * 10 ** d) / 10 ** d;
   return {
     fertilityNorm: round(fit.fertilityNorm), healthSpend: round(fit.healthSpend), education: round(fit.education, 2), growthMomentum: round(fit.growthMomentum),
     immigration: round(fit.immigration), emigrationScale: round(fit.emigrationScale), startHealth: round(fit.startHealth),
     ...(fit.contraceptionShift ? { contraceptionShift: round(fit.contraceptionShift) } : {}), ...(fit.diseaseBurden ? { diseaseBurden: round(fit.diseaseBurden) } : {}),
-    achieved: { tfr: round(m.tfr, 2), lifeExp: round(m.lifeExp, 1), meanSchooling: round(m.meanSchooling, 1), gdpGrowthPerPerson: round(m.gdpGrowthPerPerson, 2), netMigration: round(m.netMigration, 2), medianAge: round(m.medianAge, 1) },
+    ...(fit.groupFertility ? { groupFertility: Object.fromEntries(Object.entries(fit.groupFertility).map(([k, v]) => [k, round(v)])) } : {}),
+    achieved: {
+      tfr: round(m.tfr, 2), lifeExp: round(m.lifeExp, 1), meanSchooling: round(m.meanSchooling, 1), gdpGrowthPerPerson: round(m.gdpGrowthPerPerson, 2), netMigration: round(m.netMigration, 2), medianAge: round(m.medianAge, 1),
+      ...(targets.groups.length ? { groupRatio: Object.fromEntries(targets.groups.map((g) => [g.profile, round(m.group[g.profile] / m.refTfr, 2)])) } : {}),
+    },
   };
 }
 
@@ -138,8 +174,10 @@ export interface CountryFit {
   startHealth: number;
   contraceptionShift?: number;
   diseaseBurden?: number;
+  /** Family-size tendency of faith groups whose fertility is calibrated (by profile id). */
+  groupFertility?: Record<string, number>;
   /** What the calibrated simulation produced in its first years, for comparison with the targets. */
-  achieved: { tfr: number; lifeExp: number; meanSchooling: number; gdpGrowthPerPerson: number; netMigration: number; medianAge: number } | null;
+  achieved: { tfr: number; lifeExp: number; meanSchooling: number; gdpGrowthPerPerson: number; netMigration: number; medianAge: number; groupRatio?: Record<string, number> } | null;
 }
 
 export const COUNTRY_FIT: Record<string, CountryFit> = {

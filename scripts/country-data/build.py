@@ -56,6 +56,8 @@ export interface CountryRaw {
   lastCoup: number | null;
   faiths: { profile: string; share: number; name?: string }[];
   faithSource: string;
+  /** Children per woman by faith group, where a survey reports it; calibrated as ratios to the reference group(s). */
+  groupFertility: { ref: string[]; tfr: Record<string, number>; src: string } | null;
 }
 
 export const COUNTRY_DATA_DATE = '2026-10-04';
@@ -66,6 +68,8 @@ for name, c in C.items():
     tfr = c['tfr'] if c['tfr'] else (w['tfr'], 'UN World Population Prospects 2024 (2026)')
     faiths = ', '.join('{ profile: %s, share: %s%s }' % (q(p), s, (', name: ' + q(n)) if n else '') for p, s, n in c['faiths'])
     inst = src(c['instTrust']) if c['instTrust'] else 'null'
+    g_tfr = c.get('groupTfr')
+    gf = ('{ ref: [%s], tfr: { %s }, src: %s }' % (', '.join(q(r) for r in g_tfr['ref']), ', '.join('%s: %s' % (k, v) for k, v in g_tfr['tfr'].items()), q(g_tfr['src']))) if g_tfr else 'null'
     out.append(f"""  {{
     id: {q(c['id'])}, name: {q(c['name'])}, iso: {q(c['iso'])},
     population: {round(w['pop_m']*1e6)}, popGrowth: {w['growthrate']}, gdpPPP: {c['gdp']}, growth: {c['growth']},
@@ -81,6 +85,7 @@ for name, c in C.items():
     familyPlanning: {src(c['famPlan'])}, institutionalTrust: {inst}, lastCoup: {json.dumps(c['lastCoup'])},
     faiths: [{faiths}],
     faithSource: {q(c['faithSrc'])},
+    groupFertility: {gf},
   }},""")
 out.append("];\n")
 open(os.path.join(HERE, '..', '..', 'src', 'sim', 'countryData.ts'), 'w').write('\n'.join(out))
