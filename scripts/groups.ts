@@ -1,21 +1,23 @@
 // Project which faith groups grow, with the reasons (births, deaths, switching, migration).
-// Usage: npx tsx scripts/groups.ts <preset> [people=20000] [years=30] [seed=1] [immigration or -] [calm]
+// Usage: npx tsx scripts/groups.ts <preset | real:country> [people=20000] [years=30] [seed=1] [immigration or -] [calm]
 // ("calm" turns random events off, to see the underlying trends).
 // Compare with published projections quoted in each preset's description.
 
 import { Simulation } from '../src/sim/engine';
 import { PRESETS, presetScenario } from '../src/sim/presets';
+import { countryScenario, realCountries } from '../src/sim/countries';
 import { CAMPS } from '../src/sim/stats';
 
 const presetId = process.argv[2] ?? 'modern';
 const people = Number(process.argv[3] ?? 20000);
 const years = Number(process.argv[4] ?? 30);
 const seed = Number(process.argv[5] ?? 1);
-if (!PRESETS.some((p) => p.id === presetId)) {
-  console.error('Unknown preset. Available:', PRESETS.map((p) => p.id).join(', '));
+const realId = presetId.startsWith('real:') ? presetId.slice(5) : '';
+if (realId ? !realCountries().some((c) => c.id === realId) : !PRESETS.some((p) => p.id === presetId)) {
+  console.error('Unknown preset. Available:', PRESETS.map((p) => p.id).join(', '), '| real countries: ', realCountries().map((c) => 'real:' + c.id).join(', '));
   process.exit(1);
 }
-const sc = presetScenario(presetId);
+const sc = realId ? countryScenario(realId, people).scenario : presetScenario(presetId);
 sc.population.size = people;
 sc.society.seed = seed;
 if (process.argv[6] !== undefined && process.argv[6] !== '-') sc.society.immigration = Number(process.argv[6]);

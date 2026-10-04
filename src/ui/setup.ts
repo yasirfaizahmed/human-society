@@ -6,6 +6,8 @@ import { FAITH_PROFILES, profileFields } from '../sim/faiths';
 import { MAX_FAITHS } from '../sim/constants';
 import { TEMPLATES, CATEGORY_LABELS, type ScheduledEvent } from '../sim/events';
 import { PRESETS, presetScenario } from '../sim/presets';
+import { REAL_DATA_DATE, countryScenario, realCountries, type DataKind, type SheetRow } from '../sim/countries';
+import { COUNTRY_FIT } from '../sim/countryFit';
 import { compact } from '../sim/stats';
 import { clear, h, numberInput, select, slider, textInput, toast, toggle } from './dom';
 
@@ -15,6 +17,7 @@ const signed = (v: number) => (v > 0 ? '+' : '') + v.toFixed(2);
 
 const SECTIONS = [
   { id: 'start', label: 'Starting point' },
+  { id: 'sheet', label: 'Data sheet' },
   { id: 'people', label: 'Population' },
   { id: 'faith', label: 'Faith groups' },
   { id: 'minds', label: 'Personality & values' },
@@ -27,6 +30,19 @@ const SECTIONS = [
 export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onBegin: (s: ScenarioConfig) => void, onCancel: (() => void) | null) {
   let sc: ScenarioConfig = initial ? JSON.parse(JSON.stringify(initial)) : presetScenario('modern');
   let presetId = initial ? '' : 'modern';
+  // a real country: every setting comes from researched data and is locked
+  let realId = initial?.real?.countryId ?? '';
+  let sheet: SheetRow[] = realId ? countryScenario(realId, initial!.population.size).sheet : [];
+  const loadReal = (id: string, size: number) => {
+    const r = countryScenario(id, size);
+    const keep = sc.timeline;
+    sc = r.scenario;
+    sc.timeline = realId === id ? keep : [];
+    sheet = r.sheet;
+    realId = id;
+    presetId = '';
+  };
+  const visibleSections = () => SECTIONS.filter((x) => (realId ? ['start', 'sheet', 'timeline'] : SECTIONS.map((y) => y.id).filter((y) => y !== 'sheet')).includes(x.id));
   let section: (typeof SECTIONS)[number]['id'] = 'start';
   for (const ev of sc.timeline) ev.fired = false;
 
@@ -50,7 +66,7 @@ export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onB
 
   const renderNav = () => {
     clear(nav);
-    for (const s of SECTIONS) {
+    for (const s of visibleSections()) {
       nav.append(h('button', { class: 'nav-item' + (s.id === section ? ' on' : ''), 'aria-current': s.id === section ? 'step' : undefined, onclick: () => { section = s.id; renderNav(); renderBody(); } }, s.label));
     }
   };
@@ -66,6 +82,7 @@ export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onB
         h('span', {}, ` · about ${mb < 1000 ? Math.round(mb) + ' MB' : (mb / 1000).toFixed(1) + ' GB'} of memory · starts in ${sc.society.startYear}.${warn}`),
       ),
       h('div', { class: 'foot-actions' },
+        realId ? h('span', { class: 'lock-note' }, `Real data for ${sc.society.name}, as of ${REAL_DATA_DATE}: locked`) : null,
         h('button', { class: 'btn ghost', onclick: () => exportJSON() }, 'Copy as JSON'),
         h('button', { class: 'btn ghost', onclick: () => importJSON() }, 'Paste JSON'),
         h('button', { class: 'btn primary', onclick: () => { root.remove(); onBegin(normalizeScenario(sc)); } }, 'Begin simulation'),
@@ -97,6 +114,8 @@ export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onB
           if (!parsed.population || !parsed.society) throw new Error('missing population/society');
           sc = normalizeScenario({ ...presetScenario('custom'), ...parsed });
           presetId = '';
+          realId = sc.real?.countryId ?? '';
+          if (realId) loadReal(realId, sc.population.size);
           renderBody(); renderFoot();
           toast('Scenario loaded.');
         } catch (e) {
@@ -117,24 +136,45 @@ export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onB
     const set = () => renderFoot();
     switch (section) {
       case 'start': {
+        const realCards = h('div', { class: 'preset-grid' });
+        for (const c of realCountries()) {
+          realCards.append(h('button', {
+            class: 'preset real' + (c.id === realId ? ' on' : ''), 'aria-pressed': c.id === realId ? 'true' : 'false',
+            onclick: () => { loadReal(c.id, sc.population.size); renderNav(); renderBody(); renderFoot(); },
+          }, h('span', { class: 'era' }, 'Real data · 2026'), h('strong', {}, c.name), h('span', { class: 'desc' }, `${(c.population / 1e6).toFixed(c.population > 1e8 ? 0 : 1)} million people. Every setting from published data; locked.`)));
+        }
         const cards = h('div', { class: 'preset-grid' });
         for (const p of PRESETS) {
           cards.append(h('button', {
             class: 'preset' + (p.id === presetId ? ' on' : ''), 'aria-pressed': p.id === presetId ? 'true' : 'false',
-            onclick: () => { const size = sc.population.size; sc = presetScenario(p.id); sc.population.size = size; presetId = p.id; renderBody(); renderFoot(); },
+            onclick: () => { const size = sc.population.size; sc = presetScenario(p.id); sc.population.size = size; presetId = p.id; realId = ''; sheet = []; if (section === 'sheet') section = 'start'; renderNav(); renderBody(); renderFoot(); },
           }, h('span', { class: 'era' }, p.era), h('strong', {}, p.name), h('span', { class: 'desc' }, p.description)));
         }
         body.append(
-          h('section', { class: 'setup-sec' }, h('h2', {}, 'Where does history begin?'), h('p', { class: 'intro' }, 'Each starting point is only a set of slider values, so you can change everything afterwards. None of them is a real country: what happens next comes from the mechanisms, not from labels.'), cards),
-          sec('Name and size', '',
-            textInput('Society name', S.name, (v) => { S.name = v; }),
-            slider({ label: 'Population', min: 3, max: 6.6, step: 0.01, value: Math.log10(P.size), fmt: (v) => compact(Math.round(10 ** v)), help: 'Each dot is one person with a full life. Up to about 4 million in a desktop browser; 50k–300k runs fastest.', onInput: (v) => { P.size = Math.round(10 ** v); set(); } }),
-            numberInput('Start year', S.startYear, 1000, 2300, 1, (v) => { S.startYear = v; set(); }, 'Sets the calendar and the medical technology available in that era.'),
-            numberInput('Random seed', S.seed, 1, 999999999, 1, (v) => { S.seed = v; }, 'Same seed + same settings = the same history. Change it to see another possible future.'),
+          h('section', { class: 'setup-sec' },
+            h('h2', {}, 'Where does history begin?'),
+            h('p', { class: 'intro' }, `Real countries start from researched data as of ${REAL_DATA_DATE}: population and age pyramid, faiths, economy, government and values, each with its source. Their settings cannot be changed, so the starting point stays factual; you can still add events and policies once it runs. The other starting points below are slider values you can change freely.`),
+            h('h3', { class: 'group-title' }, 'Real countries (locked)'), realCards,
+            h('h3', { class: 'group-title' }, 'Scenarios you can edit'), cards,
           ),
+          realId
+            ? sec('Size of the simulation', `${sc.society.name} starts in 2026. You choose how many people to simulate: a representative sample of the real population (more people, smoother statistics, slower).`,
+              slider({ label: 'Simulated people', min: 3, max: 6.6, step: 0.01, value: Math.log10(P.size), fmt: (v) => compact(Math.round(10 ** v)), help: `Each simulated person stands for about ${Math.round((P.realPopulation ?? P.size) / P.size).toLocaleString('en-US')} real people.`, onInput: (v) => { P.size = Math.round(10 ** v); sheet = countryScenario(realId, P.size).sheet; set(); } }),
+              numberInput('Random seed', S.seed, 1, 999999999, 1, (v) => { S.seed = v; }, 'Same seed = the same history. Change it to see another possible future.'),
+              toggle('Random events (disasters, crises, leaders…)', S.randomEvents, (v) => { S.randomEvents = v; }),
+            )
+            : sec('Name and size', '',
+              textInput('Society name', S.name, (v) => { S.name = v; }),
+              slider({ label: 'Population', min: 3, max: 6.6, step: 0.01, value: Math.log10(P.size), fmt: (v) => compact(Math.round(10 ** v)), help: 'Each dot is one person with a full life. Up to about 4 million in a desktop browser; 50k–300k runs fastest.', onInput: (v) => { P.size = Math.round(10 ** v); set(); } }),
+              numberInput('Start year', S.startYear, 1000, 2300, 1, (v) => { S.startYear = v; set(); }, 'Sets the calendar and the medical technology available in that era.'),
+              numberInput('Random seed', S.seed, 1, 999999999, 1, (v) => { S.seed = v; }, 'Same seed + same settings = the same history. Change it to see another possible future.'),
+            ),
         );
         break;
       }
+      case 'sheet':
+        body.append(dataSheet(sc.society.name, realId, sheet));
+        break;
       case 'people':
         body.append(sec('Who lives here', 'The shape of the population at the start.',
           slider({ label: 'Age structure', min: 0, max: 1, step: 0.01, value: P.ageStructure, low: 'Ageing', high: 'Very young', help: 'A young population ("youth bulge") brings energy but also more unrest when jobs are scarce.', onInput: (v) => { P.ageStructure = v; } }),
@@ -350,4 +390,54 @@ function timelineEditor(sc: ScenarioConfig, rerender: () => void): HTMLElement {
     h('p', { class: 'intro' }, 'Schedule events in advance to steer the story: a depression in year 5, a charismatic leader in year 10, a pandemic in year 20. You can also trigger or schedule events while the simulation runs.'),
     list, add,
   );
+}
+
+const KIND_LABEL: Record<DataKind, string> = {
+  measured: 'Measured', derived: 'Derived', fitted: 'Calibrated', estimate: 'Estimate', default: 'Default',
+};
+const KIND_HELP: Record<DataKind, string> = {
+  measured: 'Taken directly from the source',
+  derived: 'Computed from a measured figure with the formula shown',
+  fitted: 'Tuned so the simulation reproduces the observed figure',
+  estimate: 'No comparable figure exists; a clearly stated estimate',
+  default: "No reliable national figure; the model's neutral value",
+};
+
+/** The locked settings of a real country, grouped, each with its source. */
+function dataSheet(name: string, id: string, rows: SheetRow[]): HTMLElement {
+  const wrap = h('section', { class: 'setup-sec data-sheet' },
+    h('h2', {}, `${name}: data sheet`),
+    h('p', { class: 'intro' }, `Every starting setting of this simulation and where it comes from (compiled ${REAL_DATA_DATE}). These cannot be edited.`),
+    h('div', { class: 'kind-legend' }, ...(Object.keys(KIND_LABEL) as DataKind[]).map((k) => h('span', { class: `kind kind-${k}`, title: KIND_HELP[k] }, KIND_LABEL[k]))),
+  );
+  const fit = COUNTRY_FIT[id];
+  const r = countryScenario(id, 10000).targets;
+  if (fit?.achieved) {
+    const a = fit.achieved;
+    const line = (label: string, real: string, sim: string) => h('div', { class: 'gl' }, h('span', { class: 'muted' }, label), h('b', {}, `${real} · simulated ${sim}`));
+    wrap.append(h('div', { class: 'card' },
+      h('h3', {}, 'Calibration check: today\'s figures against the simulation\'s average for 2027–2031'),
+      h('div', { class: 'glance' },
+        line('Children per woman', r.tfr.toFixed(2), a.tfr.toFixed(2)),
+        line('Life expectancy', r.lifeExp.toFixed(1), a.lifeExp.toFixed(1)),
+        line('Median age', r.medianAge.toFixed(1), a.medianAge.toFixed(1)),
+        line('Schooling, adults 25+', r.meanSchooling.toFixed(1), a.meanSchooling.toFixed(1)),
+        line('Growth per person', `${r.gdpGrowthPerPerson.toFixed(1)}%`, `${a.gdpGrowthPerPerson.toFixed(1)}%`),
+        line('Net migration per 1,000', r.netMigration.toFixed(1), a.netMigration.toFixed(1)),
+      ),
+    ));
+  }
+  const sections = [...new Set(rows.map((x) => x.section))];
+  for (const sname of sections) {
+    const list = h('div', { class: 'sheet-rows' });
+    for (const x of rows.filter((y) => y.section === sname)) {
+      list.append(h('div', { class: 'sheet-row' },
+        h('div', { class: 'sheet-head' }, h('b', {}, x.label), h('span', { class: 'sheet-val' }, x.value), h('span', { class: `kind kind-${x.kind}`, title: KIND_HELP[x.kind] }, KIND_LABEL[x.kind])),
+        x.setting ? h('div', { class: 'sheet-setting' }, `In the model: ${x.setting}`) : null,
+        h('div', { class: 'sheet-src' }, x.source),
+      ));
+    }
+    wrap.append(h('div', { class: 'card' }, h('h3', {}, sname), list));
+  }
+  return wrap;
 }
