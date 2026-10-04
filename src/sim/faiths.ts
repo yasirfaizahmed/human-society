@@ -17,7 +17,7 @@ export interface FaithProfile {
   id: string;
   /** Short name used for the group, e.g. "Muslims". */
   name: string;
-  tradition: 'Christianity' | 'Islam' | 'Hinduism' | 'Buddhism' | 'Judaism' | 'Sikhism' | 'Folk religion' | 'No religion';
+  tradition: 'Christianity' | 'Islam' | 'Hinduism' | 'Buddhism' | 'Judaism' | 'Sikhism' | 'Folk religion' | 'Other religions' | 'No religion';
   context: string;
   color: string;
   religiosity: number;
@@ -49,6 +49,7 @@ export const TRADITION_COLORS: Record<FaithProfile['tradition'], string> = {
   Judaism: '#9085e9',
   Sikhism: '#d55181',
   'Folk religion': '#a0703c',
+  'Other religions': '#b07ab8',
   'No religion': '#8b8a84',
 };
 
@@ -101,6 +102,11 @@ export const FAITH_PROFILES: FaithProfile[] = [
     source: 'Pew 2021 "Religious Composition of India" (Christians: TFR 1.88, slightly older than average).',
   }),
   P({
+    id: 'christian_sea', name: 'Christians', tradition: 'Christianity', context: 'Southeast Asia (Indonesia, Malaysia)',
+    religiosity: 0.85, strictness: 0.5, fertility: 0.1, retention: 0.92, outreach: 0.5, endogamy: 0.8, eduGap: 0.5, wealthRatio: 1, youth: 0,
+    source: 'Indonesia Ministry of Home Affairs 2023 (Protestants 7.4%, Catholics 3.1%); BPS 2020 census.',
+  }),
+  P({
     id: 'protestant_1920', name: 'Protestants', tradition: 'Christianity', context: 'Europe, early 20th century',
     religiosity: 0.55, strictness: 0.45, fertility: -0.1, retention: 0.8, outreach: 0.2, endogamy: 0.6, eduGap: 0.4, wealthRatio: 1.05, youth: -0.02,
     source: 'Historical demography of interwar Germany and the Netherlands (Protestants: earlier fertility decline).',
@@ -120,6 +126,11 @@ export const FAITH_PROFILES: FaithProfile[] = [
     id: 'muslim_mena', name: 'Muslims', tradition: 'Islam', context: 'Middle East & North Africa',
     religiosity: 0.85, strictness: 0.55, fertility: 0.15, retention: 0.94, outreach: 0.35, endogamy: 0.88, eduGap: 0, wealthRatio: 1, youth: 0.03,
     source: 'Pew 2012/2013 "The World\'s Muslims"; Pew 2015 "The Future of World Religions" (median age 23 worldwide).',
+  }),
+  P({
+    id: 'muslim_turkey', name: 'Muslims', tradition: 'Islam', context: 'Turkey',
+    religiosity: 0.7, strictness: 0.45, fertility: 0, retention: 0.93, outreach: 0.1, endogamy: 0.85, eduGap: 0, wealthRatio: 1, youth: 0,
+    source: 'Pew 2025 religious switching survey (95% of Turkish adults identify as Muslim, 98% were raised Muslim); TurkStat.',
   }),
   P({
     id: 'muslim_south_asia', name: 'Muslims', tradition: 'Islam', context: 'South Asia',
@@ -161,6 +172,21 @@ export const FAITH_PROFILES: FaithProfile[] = [
     id: 'sikh', name: 'Sikhs', tradition: 'Sikhism', context: 'India & diaspora',
     religiosity: 0.8, strictness: 0.5, fertility: -0.3, retention: 0.92, outreach: 0.05, endogamy: 0.9, eduGap: 1, wealthRatio: 1.3, youth: -0.05,
     source: 'Pew 2021 "Religious Composition of India" (Sikhs: lowest fertility of India\'s major groups, 1.6).',
+  }),
+  P({
+    id: 'hindu_minority_south_asia', name: 'Hindus', tradition: 'Hinduism', context: 'Minority in Bangladesh & Pakistan',
+    religiosity: 0.8, strictness: 0.45, fertility: -0.35, retention: 0.95, outreach: 0.02, endogamy: 0.95, eduGap: 0.6, wealthRatio: 0.95, youth: -0.1,
+    source: 'Bangladesh census 2022 (Hindus 7.95%, down from 13.5% in 1974: lower fertility and emigration); Pakistan census 2023 (1.61%).',
+  }),
+  P({
+    id: 'hindu_bali', name: 'Hindus', tradition: 'Hinduism', context: 'Indonesia (Bali)',
+    religiosity: 0.9, strictness: 0.45, fertility: -0.2, retention: 0.95, outreach: 0.02, endogamy: 0.85, eduGap: 0.4, wealthRatio: 1.1, youth: -0.05,
+    source: 'Indonesia Ministry of Home Affairs 2023 (Hindus 1.7%, mostly Balinese); BPS (Bali TFR about 2.0).',
+  }),
+  P({
+    id: 'druze', name: 'Druze', tradition: 'Other religions', context: 'Levant (Israel, Lebanon, Syria)',
+    religiosity: 0.6, strictness: 0.5, fertility: -0.4, retention: 0.97, outreach: 0, endogamy: 0.99, eduGap: 0.3, wealthRatio: 0.85, youth: -0.02,
+    source: 'Israel CBS 2025 (Druze 1.6% of Israelis; closed faith that accepts no converts; TFR about 1.8).',
   }),
   // ------------------------------------------------------------------ Buddhism
   P({
@@ -206,6 +232,11 @@ export const FAITH_PROFILES: FaithProfile[] = [
     source: 'Pew 2015 "The Future of World Religions".',
   }),
   P({
+    id: 'spiritist_brazil', name: 'Spiritists & Afro-Brazilian faiths', tradition: 'Other religions', context: 'Brazil',
+    religiosity: 0.5, strictness: 0.15, fertility: -0.35, retention: 0.6, outreach: 0.25, endogamy: 0.15, eduGap: 2.5, wealthRatio: 1.5, youth: -0.15,
+    source: 'IBGE census 2022 (Spiritists 1.8%, Umbanda & Candomblé 1.0%; Spiritists are the most educated religious group).',
+  }),
+  P({
     id: 'none_west', name: 'Non-religious', tradition: 'No religion', context: 'Europe & the Americas',
     religiosity: 0.04, strictness: 0.15, fertility: -0.05, retention: 0.6, outreach: 0.35, endogamy: 0.15, eduGap: 0.5, wealthRatio: 1.05, youth: 0.08, secular: true, tolerance: 0.62,
     source: 'Pew 2015 (unaffiliated: TFR 1.7, median age 34; gain the most from switching in the West).',
@@ -214,6 +245,11 @@ export const FAITH_PROFILES: FaithProfile[] = [
     id: 'none_eastasia', name: 'Non-religious', tradition: 'No religion', context: 'East Asia',
     religiosity: 0.06, strictness: 0.15, fertility: -0.3, retention: 0.8, outreach: 0.15, endogamy: 0.2, eduGap: 0.3, wealthRatio: 1.05, youth: -0.05, secular: true,
     source: 'Pew 2015 (most of the world\'s unaffiliated live in China; low fertility).',
+  }),
+  P({
+    id: 'none_muslim_world', name: 'Non-religious', tradition: 'No religion', context: 'Muslim-majority countries (e.g. Turkey)',
+    religiosity: 0.05, strictness: 0.15, fertility: -0.3, retention: 0.7, outreach: 0.15, endogamy: 0.2, eduGap: 1.5, wealthRatio: 1.3, youth: 0.1, secular: true,
+    source: 'Pew 2025 switching survey (Turkey: about 4% of adults unaffiliated, mostly young, urban and educated).',
   }),
 ];
 

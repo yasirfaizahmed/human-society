@@ -78,6 +78,10 @@ export interface PopulationConfig {
   /** Wealth inequality (approximate wealth Gini, 0.3..0.95). */
   wealthInequality: number;
   faiths: FaithGroup[];
+  /** Real population the simulated people stand for (sets the scale of reported numbers). */
+  realPopulation?: number;
+  /** Real age distribution: share of people in 5-year bands 0–4 … 95–99, then 100+. Overrides ageStructure. */
+  ageBands?: number[];
 }
 
 export type ReligiousPolicy = 'neutral' | 'favor' | 'theocracy' | 'suppress';
@@ -134,6 +138,24 @@ export interface SocietyConfig {
   minorityBias: number;
   /** How open borders are to immigrants (0 = closed, 1 = very open). Rich, peaceful societies attract more. */
   immigration: number;
+  /** Multiplier on how readily people emigrate (1 = typical). */
+  emigrationScale?: number;
+  /** Shift of everyone's desired family size (children), e.g. from national norms not captured elsewhere. */
+  fertilityNorm?: number;
+  /** Shift of birth-control use away from what development predicts (access, norms, programmes). */
+  contraceptionShift?: number;
+  /** Lost access to effective healthcare from endemic disease and weak health systems (0 = none). */
+  diseaseBurden?: number;
+  /**
+   * Extra growth per year at the start (percentage points) above what productivity growth gives,
+   * fading by half every 10 years: fast (or slow) growth regresses to the mean (Pritchett & Summers 2014).
+   */
+  growthMomentum?: number;
+  /**
+   * Governments move policies relative to the country's starting levels instead of toward generic
+   * levels for their ideology (used for real countries, whose starting levels are measured).
+   */
+  anchorPolicies?: boolean;
   /** 0 = individualist, 1 = collectivist: weight of family/community approval. */
   collectivism: number;
   /** Share of people on algorithmic social media. */
@@ -159,10 +181,19 @@ export interface Trends {
   tolerance: number;
 }
 
+/** Present when the scenario is a real country loaded from researched data (its settings are locked). */
+export interface RealDataTag {
+  countryId: string;
+  name: string;
+  asOf: string;
+}
+
 export interface ScenarioConfig {
   population: PopulationConfig;
   society: SocietyConfig;
   timeline: ScheduledEvent[];
+  /** Set when this is a real country loaded from researched data. */
+  real?: RealDataTag;
 }
 
 export const FAITH_COLORS = ['#3987e5', '#eb6834', '#1baf7a', '#c98500', '#d55181', '#9085e9'];

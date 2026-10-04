@@ -85,7 +85,7 @@ export const PRESETS: Preset[] = [
         faith('buddhist_sea', 0.007),
         faith('none_eastasia', 0.01, { name: 'Others & non-religious', profile: 'none_eastasia' }),
       ];
-      Object.assign(c, { name: 'India', startYear: 2025, gdpPerCapita: 10500, techGrowth: 2.2, democracy: 0.58, ruleOfLaw: 0.48, pressFreedom: 0.45, repression: 0.3, securityLoyalty: 0.85, marketFreedom: 0.6, taxRate: 0.18, progressivity: 0.4, welfare: 0.25, eduAccess: 0.72, healthSpend: 0.4, military: 0.55, policing: 0.5, genderEquality: 0.45, familyPlanning: 1, religiousPolicy: 'neutral', minorityBias: 0.35, immigration: 0.05, collectivism: 0.82, socialMedia: 0.55, electionYears: 5 });
+      Object.assign(c, { name: 'India', startYear: 2025, gdpPerCapita: 10500, techGrowth: 2.2, democracy: 0.58, ruleOfLaw: 0.48, pressFreedom: 0.45, repression: 0.3, securityLoyalty: 0.85, marketFreedom: 0.6, taxRate: 0.18, progressivity: 0.4, welfare: 0.25, eduAccess: 0.72, healthSpend: 0.4, military: 0.55, policing: 0.5, genderEquality: 0.45, familyPlanning: 0.95, religiousPolicy: 'neutral', minorityBias: 0.35, immigration: 0.05, collectivism: 0.82, socialMedia: 0.55, electionYears: 5 });
       c.ruling = { social: 0.3, econ: 0.55, auth: 0.6, relig: 0.7, patriot: 0.85 };
       c.trends = { consumerism: 0.25, patriotism: 0.25, religiosity: 0.1, liberalism: 0, capitalism: 0.1, authority: 0.05, tolerance: -0.05 };
     },

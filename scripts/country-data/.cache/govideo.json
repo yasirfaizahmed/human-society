@@ -1,0 +1,173 @@
+{
+ "India": {
+  "parties": [
+   "BJP"
+  ],
+  "years": [
+   2019
+  ],
+  "econ": 0.783,
+  "social": 0.344,
+  "relig": 0.708,
+  "patriot": 0.845,
+  "auth": 0.446
+ },
+ "Pakistan": {
+  "parties": [
+   "PML(N)"
+  ],
+  "years": [
+   2018
+  ],
+  "econ": 0.583,
+  "social": 0.413,
+  "relig": 0.488,
+  "patriot": 0.526,
+  "auth": 0.45
+ },
+ "Bangladesh": {
+  "parties": [
+   "BNP"
+  ],
+  "years": [
+   2008
+  ],
+  "econ": 0.71,
+  "social": 0.437,
+  "relig": 0.644,
+  "patriot": 0.688,
+  "auth": 0.65
+ },
+ "Indonesia": {
+  "parties": [
+   "Gerindra"
+  ],
+  "years": [
+   2019
+  ],
+  "econ": 0.383,
+  "social": 0.315,
+  "relig": 0.452,
+  "patriot": 0.783,
+  "auth": 0.725
+ },
+ "Nigeria": {
+  "parties": [
+   "APC"
+  ],
+  "years": [
+   2019
+  ],
+  "econ": 0.301,
+  "social": 0.291,
+  "relig": 0.451,
+  "patriot": 0.542,
+  "auth": 0.458
+ },
+ "Turkey": {
+  "parties": [
+   "People's All..."
+  ],
+  "years": [
+   2018
+  ],
+  "econ": 0.746,
+  "social": 0.176,
+  "relig": 0.783,
+  "patriot": 0.605,
+  "auth": 0.977
+ },
+ "United States": {
+  "parties": [
+   "Rep"
+  ],
+  "years": [
+   2018
+  ],
+  "econ": 0.751,
+  "social": 0.378,
+  "relig": 0.591,
+  "patriot": 0.726,
+  "auth": 0.545
+ },
+ "United Kingdom": {
+  "parties": [
+   "Lab"
+  ],
+  "years": [
+   2019
+  ],
+  "econ": 0.171,
+  "social": 0.73,
+  "relig": 0.034,
+  "patriot": 0.373,
+  "auth": 0.363
+ },
+ "Germany": {
+  "parties": [
+   "SPD",
+   "CDU"
+  ],
+  "years": [
+   2017,
+   2017
+  ],
+  "econ": 0.49,
+  "social": 0.688,
+  "relig": 0.246,
+  "patriot": 0.344,
+  "auth": 0.099
+ },
+ "France": {
+  "parties": [
+   "LaREM"
+  ],
+  "years": [
+   2017
+  ],
+  "econ": 0.602,
+  "social": 0.681,
+  "relig": 0.025,
+  "patriot": 0.457,
+  "auth": 0.15
+ },
+ "Israel": {
+  "parties": [
+   "L"
+  ],
+  "years": [
+   2019
+  ],
+  "econ": 0.708,
+  "social": 0.379,
+  "relig": 0.34,
+  "patriot": 0.762,
+  "auth": 0.48
+ },
+ "Brazil": {
+  "parties": [
+   "PT"
+  ],
+  "years": [
+   2018
+  ],
+  "econ": 0.231,
+  "social": 0.741,
+  "relig": 0.014,
+  "patriot": 0.195,
+  "auth": 0.254
+ },
+ "Egypt": {
+  "parties": [
+   "NFP"
+  ],
+  "years": [
+   2015
+  ],
+  "econ": 0.505,
+  "social": 0.291,
+  "relig": 0.361,
+  "patriot": 0.894,
+  "auth": 0.621
+ }
+}

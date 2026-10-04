@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "headless": "tsx scripts/headless.ts",
     "sweep": "tsx scripts/sweep.ts",
-    "groups": "tsx scripts/groups.ts"
+    "groups": "tsx scripts/groups.ts",
+    "fit-countries": "tsx scripts/fit-countries.ts",
+    "country-data": "python3 scripts/country-data/build.py"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

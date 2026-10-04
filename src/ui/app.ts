@@ -271,11 +271,12 @@ export class App {
     lensSel.addEventListener('change', () => this.setLens(lensSel.value));
     this.els.date = h('div', { class: 'date', 'aria-live': 'off' }, '—');
     this.els.regime = h('span', { class: 'chip' }, '—');
+    this.els.realTag = this.scenario.real ? h('span', { class: 'chip real', title: `Started from researched data for ${this.scenario.real.name}, compiled ${this.scenario.real.asOf}` }, `Real data · ${this.scenario.real.asOf.slice(0, 4)}`) : h('span', {});
     this.els.society = h('span', { class: 'society-name' }, this.scenario.society.name);
     this.els.perf = h('span', { class: 'perf' }, '');
     const topbar = h('header', { class: 'topbar' },
       h('div', { class: 'brand' }, h('span', { class: 'logo', 'aria-hidden': 'true' }), h('span', {}, 'Human Society')),
-      h('div', { class: 'title' }, this.els.society, this.els.regime),
+      h('div', { class: 'title' }, this.els.society, this.els.regime, this.els.realTag),
       this.els.date,
       h('div', { class: 'transport' },
         playBtn,
@@ -556,11 +557,11 @@ export class App {
             h('div', { class: 'bar-val' }, `${(p.share * 100).toFixed(0)}%`),
           ));
         }
-        const elect = S.democracy >= 0.45 && S.nextElection > st.t
-          ? `Next election in ${Math.max(0, Math.round((S.nextElection - st.t) / 12 * 10) / 10)} years.`
-          : S.democracy < 0.45 ? 'No free elections: these are hidden sympathies.' : '';
+        const elect = S.democracy >= 0.3 && S.nextElection > st.t
+          ? `Next election in ${Math.max(0, Math.round((S.nextElection - st.t) / 12 * 10) / 10)} years.${S.democracy < 0.5 ? ' Elections are held but tilted toward the rulers.' : ''}`
+          : S.democracy < 0.3 ? 'No real elections: these are hidden sympathies.' : '';
         el.append(h('div', { class: 'card' },
-          h('h3', {}, S.democracy >= 0.45 ? 'Polls' : 'Political sympathies'),
+          h('h3', {}, S.democracy >= 0.3 ? 'Polls' : 'Political sympathies'),
           rows,
           S.lastElection ? h('p', { class: 'muted small' }, `Last election (${S.lastElection.year}): ${S.lastElection.headline}`) : null,
           h('p', { class: 'muted small' }, elect),
@@ -1082,6 +1083,10 @@ export class App {
     const S = (st: FrameState) => st.S;
     const pe = this.state?.S.politicsEndogenous ?? this.scenario.society.politicsEndogenous;
     el.append(
+      this.scenario.real ? h('div', { class: 'card' },
+        h('h3', {}, `Started from real data for ${this.scenario.real.name}`),
+        h('p', { class: 'muted small' }, `The starting point was locked to researched data compiled ${this.scenario.real.asOf}. Anything you change here is a what-if experiment from that point on.`),
+      ) : '',
       h('div', { class: 'card' },
         h('h3', {}, 'Who decides policy?'),
         toggle('Rulers set policy themselves', pe, (v) => this.send({ type: 'policy', key: 'politicsEndogenous', value: v })),

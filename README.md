@@ -33,6 +33,7 @@ Other commands:
 | `npm run typecheck` | TypeScript checks |
 | `npm run headless -- <preset> <people> <years> <seed>` | Run without the UI and print yearly indicators, e.g. `npm run headless -- fragileDemocracy 20000 30 4` |
 | `npm run sweep -- [preset\|all] [people] [years] [seeds]` | Robustness sweep over presets and seeds: ranges of key indicators, NaN checks, headline events |
+| `npm run fit-countries -- [country\|all]` | Calibrate the real countries so the simulation reproduces their observed fertility, life expectancy, schooling, growth and migration (writes `src/sim/countryFit.ts`). See `scripts/country-data/README.md` for refreshing the data |
 | `npm run groups -- <preset> [people] [years] [seed] [immigration or -] [calm]` | Which faith groups and ideology camps grow, every 5 years, with each group's fertility, age, schooling, wealth and flows per 1,000 (births, deaths, converts in and out, immigrants, emigrants). `calm` turns random events off. Example: `npm run groups -- modern 20000 25 1 0` |
 
 The simulation runs in a Web Worker, so the page stays responsive. People are drawn with WebGL2 as
@@ -60,7 +61,21 @@ families kept together), so they stay fast whatever the main population is.
 ## What you can do
 
 **Set up a society** (the first screen):
-- Start from a preset or a blank slate. Present-day presets use real countries' religious make-up and
+- **Real countries, locked to researched data (as of 4 October 2026)**: India, Pakistan, Bangladesh,
+  Indonesia, Nigeria, Egypt, Türkiye, the United States, the United Kingdom, Germany, France, Israel
+  and Brazil. Population and age pyramid (UN World Population Prospects 2024), religious make-up
+  (censuses and Pew 2025), religiosity, GDP and growth (IMF April 2026), schooling (UNDP),
+  urbanization (World Bank), democracy, rule of law, free speech, repression and women's status
+  (V-Dem 2025, Freedom House 2026), who governs and their positions (V-Party), values, trust, social
+  media use, taxes, welfare and military spending. Each setting shows its source and whether it is
+  measured, derived by a stated formula, calibrated (tuned so the simulation reproduces the
+  country's observed fertility, life expectancy, schooling, growth and migration), an estimate,
+  or a neutral default where no comparable figure exists. These settings cannot be edited; you
+  choose only how many people to simulate, the random seed, and whether random events happen,
+  and you can still script events and change policy once it runs. For long projections, today's
+  growth rate fades toward the model's own (growth regresses to the mean) and governments move
+  policy from the measured levels rather than toward generic ones.
+- Or start from an editable preset or a blank slate. Present-day presets use real countries' religious make-up and
   published projections to compare against: Western Europe, the United States, India, Nigeria,
   Israel, a Nordic welfare state, a young Arab autocracy (2010) and a devout South Asian society.
   Historical presets (1800 kingdom, 1900 industrializing nation, 1920s republic) are stylised.
@@ -181,6 +196,9 @@ src/sim/        the simulation (no DOM; runs in a worker or in Node)
   config.ts     initial-condition types and defaults
   presets.ts    starting scenarios
   faiths.ts     real faith traditions by region, with sources
+  countryData.ts  researched data for real countries (generated; see scripts/country-data)
+  countries.ts  turns country data into locked settings, with a sourced data sheet
+  countryFit.ts calibrated settings for real countries (generated)
   politics.ts   emergent parties, naming, ideology helpers
   forecast.ts   Monte Carlo futures and what-if comparisons
   lens.ts       map colour schemes
