@@ -3,6 +3,7 @@
 
 import { MAX_FAITHS } from './constants';
 import type { ScheduledEvent } from './events';
+import { profileFields } from './faiths';
 
 export interface FaithGroup {
   name: string;
@@ -17,7 +18,28 @@ export interface FaithGroup {
   tolerance: number;
   /** Marks the "no religion" group (atheists/agnostics). */
   secular?: boolean;
+  /** Profile from the library this group was created from (see faiths.ts). */
+  profile?: string;
+  /** Extra desired children per woman compared with an otherwise identical person. */
+  fertility?: number;
+  /** 0..1: how firmly the group keeps adults and raises children in the faith. */
+  retention?: number;
+  /** 0..1: how actively the group gains converts. */
+  outreach?: number;
+  /** 0..1: preference for marrying within the group. */
+  endogamy?: number;
+  /** Years of schooling above/below the national average at the start. */
+  eduGap?: number;
+  /** Wealth relative to the national average at the start. */
+  wealthRatio?: number;
+  /** Younger (+) or older (−) age structure than the national average. */
+  youth?: number;
+  /** Where the defaults come from. */
+  note?: string;
 }
+
+/** Defaults for the demographic fields of a faith group. */
+export const FAITH_DEFAULTS = { fertility: 0, retention: 0.75, outreach: 0.2, endogamy: 0.6, eduGap: 0, wealthRatio: 1, youth: 0 };
 
 export interface PopulationConfig {
   size: number;
@@ -101,6 +123,11 @@ export interface SocietyConfig {
   military: number;
   policing: number;
   genderEquality: number;
+  /**
+   * National family-planning programmes and the small-family norm they spread (India since 1952,
+   * Bangladesh, Iran after 1989, China): more birth control and smaller desired families.
+   */
+  familyPlanning: number;
   religiousPolicy: ReligiousPolicy;
   favoredFaith: number;
   /** Social discrimination against minority faith groups. */
@@ -141,11 +168,8 @@ export interface ScenarioConfig {
 export const FAITH_COLORS = ['#3987e5', '#eb6834', '#1baf7a', '#c98500', '#d55181', '#9085e9'];
 
 export function defaultFaiths(): FaithGroup[] {
-  return [
-    { name: 'Faith A', color: FAITH_COLORS[0], share: 0.55, religiosity: 0.62, strictness: 0.45, tolerance: 0.6 },
-    { name: 'Faith B', color: FAITH_COLORS[1], share: 0.2, religiosity: 0.7, strictness: 0.5, tolerance: 0.55 },
-    { name: 'Non-religious', color: FAITH_COLORS[2], share: 0.25, religiosity: 0.06, strictness: 0.2, tolerance: 0.65, secular: true },
-  ];
+  const mk = (id: string, share: number): FaithGroup => ({ ...(profileFields(id) as FaithGroup), share });
+  return [mk('christian_us', 0.55), mk('muslim_us', 0.2), mk('none_west', 0.25)];
 }
 
 export function defaultPopulation(): PopulationConfig {
@@ -198,6 +222,7 @@ export function defaultSociety(): SocietyConfig {
     military: 0.35,
     policing: 0.5,
     genderEquality: 0.65,
+    familyPlanning: 0,
     religiousPolicy: 'neutral',
     favoredFaith: 0,
     minorityBias: 0.2,
@@ -226,7 +251,14 @@ export function normalizeScenario(s: ScenarioConfig): ScenarioConfig {
   if (!p.faiths.length) p.faiths = defaultFaiths();
   p.faiths = p.faiths.slice(0, MAX_FAITHS);
   const tot = p.faiths.reduce((a, f) => a + Math.max(0, f.share), 0) || 1;
-  for (const f of p.faiths) f.share = Math.max(0, f.share) / tot;
+  for (const f of p.faiths) {
+    f.share = Math.max(0, f.share) / tot;
+    for (const [k, v] of Object.entries(FAITH_DEFAULTS)) {
+      const key = k as keyof typeof FAITH_DEFAULTS;
+      if (typeof f[key] !== 'number' || !isFinite(f[key] as number)) f[key] = v;
+    }
+  }
+  if (typeof c.society.familyPlanning !== 'number') c.society.familyPlanning = 0;
   c.society.favoredFaith = Math.max(0, Math.min(p.faiths.length - 1, c.society.favoredFaith | 0));
   c.timeline = c.timeline || [];
   return c;

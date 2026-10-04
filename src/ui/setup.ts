@@ -1,7 +1,8 @@
 // The "New society" screen: pick a starting point, then adjust anything before pressing Begin.
 
 import { AgentStore } from '../sim/agents';
-import { FAITH_COLORS, normalizeScenario, type FaithGroup, type ScenarioConfig } from '../sim/config';
+import { FAITH_COLORS, FAITH_DEFAULTS, normalizeScenario, type FaithGroup, type ScenarioConfig } from '../sim/config';
+import { FAITH_PROFILES, profileFields } from '../sim/faiths';
 import { MAX_FAITHS } from '../sim/constants';
 import { TEMPLATES, CATEGORY_LABELS, type ScheduledEvent } from '../sim/events';
 import { PRESETS, presetScenario } from '../sim/presets';
@@ -150,9 +151,25 @@ export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onB
           clear(list);
           P.faiths.forEach((f, idx) => list.append(faithRow(f, idx)));
           if (P.faiths.length < MAX_FAITHS) list.append(h('button', { class: 'btn ghost', onclick: () => {
-            P.faiths.push({ name: `Faith ${String.fromCharCode(65 + P.faiths.length)}`, color: FAITH_COLORS[P.faiths.length % FAITH_COLORS.length], share: 0.1, religiosity: 0.6, strictness: 0.5, tolerance: 0.5 });
+            P.faiths.push({ name: `Faith ${String.fromCharCode(65 + P.faiths.length)}`, color: FAITH_COLORS[P.faiths.length % FAITH_COLORS.length], share: 0.1, religiosity: 0.6, strictness: 0.5, tolerance: 0.5, ...FAITH_DEFAULTS });
             redraw();
-          } }, '+ Add a faith group'));
+          } }, '+ Add a group'));
+        };
+        const profileSelect = (f: FaithGroup) => {
+          const sel = h('select', { 'aria-label': 'Real tradition' }) as HTMLSelectElement;
+          sel.append(h('option', { value: '', selected: !f.profile }, 'Custom (set the dials yourself)'));
+          for (const t of [...new Set(FAITH_PROFILES.map((p) => p.tradition))]) {
+            const og = h('optgroup', { label: t });
+            for (const p of FAITH_PROFILES.filter((x) => x.tradition === t)) og.append(h('option', { value: p.id, selected: p.id === f.profile }, `${p.name} — ${p.context}`));
+            sel.append(og);
+          }
+          sel.addEventListener('change', () => {
+            const pf = profileFields(sel.value);
+            if (pf) Object.assign(f, pf);
+            else { f.profile = undefined; f.note = undefined; }
+            redraw();
+          });
+          return h('div', { class: 'field' }, h('label', {}, 'Real tradition and region'), sel);
         };
         const faithRow = (f: FaithGroup, idx: number) => h('div', { class: 'faith-row' },
           h('div', { class: 'faith-top' },
@@ -161,17 +178,31 @@ export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onB
             toggle('No religion (atheist / agnostic)', !!f.secular, (v) => { f.secular = v; if (v) { f.religiosity = 0.05; } redraw(); }),
             P.faiths.length > 1 ? h('button', { class: 'btn ghost small', onclick: () => { P.faiths.splice(idx, 1); redraw(); } }, 'Remove') : null,
           ),
+          profileSelect(f),
+          f.note ? h('p', { class: 'help' }, `Source: ${f.note}`) : null,
           h('div', { class: 'grid4' },
             slider({ label: 'Share of population', min: 0, max: 1, step: 0.01, value: f.share, fmt: pct, onInput: (v) => { f.share = v; } }),
             f.secular ? null : slider({ label: 'Religiosity', min: 0, max: 1, step: 0.01, value: f.religiosity, fmt: f2, low: 'Nominal', high: 'Devout', onInput: (v) => { f.religiosity = v; } }),
             slider({ label: 'Interpretation', min: 0, max: 1, step: 0.01, value: f.strictness, fmt: f2, low: 'Flexible', high: 'Literal', onInput: (v) => { f.strictness = v; } }),
             slider({ label: 'Tolerance of others', min: 0, max: 1, step: 0.01, value: f.tolerance, fmt: f2, low: 'Hostile', high: 'Accepting', onInput: (v) => { f.tolerance = v; } }),
           ),
+          h('details', { class: 'faith-demo' },
+            h('summary', {}, 'Demographics: what makes the group grow or shrink'),
+            h('div', { class: 'grid4' },
+              slider({ label: 'Family size', min: -1.5, max: 3, step: 0.05, value: f.fertility ?? 0, fmt: signed, low: 'Smaller', high: 'Larger', help: 'Extra children wanted per woman, compared with someone of the same devotion, schooling and income.', onInput: (v) => { f.fertility = v; } }),
+              slider({ label: 'Keeps its members', min: 0.3, max: 1, step: 0.01, value: f.retention ?? FAITH_DEFAULTS.retention, fmt: pct, help: 'Share of those raised in the group who stay in it as adults.', onInput: (v) => { f.retention = v; } }),
+              slider({ label: 'Gains converts', min: 0, max: 1, step: 0.01, value: f.outreach ?? FAITH_DEFAULTS.outreach, fmt: f2, low: 'Closed', high: 'Missionary', onInput: (v) => { f.outreach = v; } }),
+              slider({ label: 'Marries within the group', min: 0, max: 1, step: 0.01, value: f.endogamy ?? FAITH_DEFAULTS.endogamy, fmt: f2, onInput: (v) => { f.endogamy = v; } }),
+              slider({ label: 'Schooling vs average', min: -4, max: 4, step: 0.1, value: f.eduGap ?? 0, fmt: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} yrs`, onInput: (v) => { f.eduGap = v; } }),
+              slider({ label: 'Wealth vs average', min: 0.3, max: 2, step: 0.05, value: f.wealthRatio ?? 1, fmt: (v) => `${v.toFixed(2)}×`, onInput: (v) => { f.wealthRatio = v; } }),
+              slider({ label: 'Age structure', min: -0.4, max: 0.5, step: 0.01, value: f.youth ?? 0, fmt: signed, low: 'Older', high: 'Younger', onInput: (v) => { f.youth = v; } }),
+            ),
+          ),
         );
         redraw();
         body.append(h('section', { class: 'setup-sec' },
           h('h2', {}, 'Faith groups'),
-          h('p', { class: 'intro' }, 'Name the communities and set their size and character. Devotion, interpretation and tolerance are separate dials: in the model, extremism grows from grievance, humiliation, isolation and militant networks, not from piety itself. Shares are normalized automatically.'),
+          h('p', { class: 'intro' }, 'Pick real traditions (by region, because the same religion differs a lot between countries) or build your own. Profiles hold only measurable things that decide whether a group grows: family size, age, how many members it keeps, converts, marriage within the group, schooling and wealth, with sources from Pew Research and national surveys. They carry no claims about character: in the model, violence grows from grievance, humiliation and militant networks, which can affect any group. Shares are normalized automatically.'),
           list,
         ));
         break;
@@ -223,6 +254,7 @@ export function openSetup(host: HTMLElement, initial: ScenarioConfig | null, onB
             slider({ label: 'Military strength', min: 0, max: 1, step: 0.01, value: S.military, fmt: f2, onInput: (v) => { S.military = v; } }),
             slider({ label: 'Policing', min: 0, max: 1, step: 0.01, value: S.policing, fmt: f2, onInput: (v) => { S.policing = v; } }),
             slider({ label: 'Gender equality', min: 0, max: 1, step: 0.01, value: S.genderEquality, fmt: f2, onInput: (v) => { S.genderEquality = v; } }),
+            slider({ label: 'Family-planning programmes', min: 0, max: 1, step: 0.01, value: S.familyPlanning, fmt: f2, low: 'None', high: 'Strong', help: 'State campaigns for small families and free birth control (India since 1952, Bangladesh, Iran after 1989). They lower fertility even where schooling is low.', onInput: (v) => { S.familyPlanning = v; } }),
             select('State and religion', [
               { value: 'neutral', label: 'Neutral (freedom of religion)' },
               { value: 'favor', label: 'Favours one faith' },

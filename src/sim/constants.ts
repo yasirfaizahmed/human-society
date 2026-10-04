@@ -58,5 +58,5 @@ export const GRID_W = WORLD_W / CELL;
 export const GRID_H = WORLD_H / CELL;
 export const NCELLS = GRID_W * GRID_H;
 
-export const MAX_FAITHS = 6;
+export const MAX_FAITHS = 8;
 export const FRIEND_SLOTS = 4;

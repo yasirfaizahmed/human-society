@@ -61,18 +61,34 @@ deaths can come from epidemics, war, violence, famine, repression or suicide.
 
 **Fertility** follows the proximate-determinants logic (Bongaarts 1978). Each woman has a
 *desired family size*, which rises with religiosity, traditional values, child mortality (replacement),
-collectivism and farming, and falls with her schooling. Natural fertility (about 0.8 conceptions a year at
-peak with roughly 30-month birth spacing) applies until she reaches it; after that, births happen
-only as far as contraception fails. Educated women also delay their first birth. This produces a
-total fertility rate of about 5–7 in agrarian societies and 1.4–1.9 in rich secular ones, with
-religious groups keeping higher fertility (Pew 2015; Kaufmann 2010).
-Female education is the strongest single predictor of falling fertility (Lutz & KC 2011).
+collectivism and farming, falls with her schooling, and is shifted by her group's family-size norm
+(the profile's *fertility*). Each woman's own threshold is desired − U(0, 1), so completed families
+average exactly the desired size. Natural fertility (about 0.62 conceptions a year at peak, about
+34-month birth spacing) applies until she reaches it, slowed a little where couples space births with
+birth control; after that, births happen only as far as contraception fails.
+
+Birth-control use follows development (an S-curve: low in poor farming societies, near universal in rich
+ones), women's status and her own schooling; doctrines against it hold back the devout and literal,
+and pronatalist groups use less of it. **Family-planning programmes** (a society setting) reach women
+without schooling too and pull larger desired families down toward a two-child norm, not below
+(India since 1952, Bangladesh, Iran after 1989). Schooling postpones partnership (women at about
+15 + 0.75 × years of school) and the first birth, except in devout communities that keep early marriage
+as a norm. This gives total fertility of about 5–6 in poor farming societies, 2–2.5 in middle-income
+ones with family planning and 1.3–1.8 in rich ones, with religious groups keeping higher fertility
+(Pew 2015; Kaufmann 2010). Female education is the strongest single predictor of falling fertility
+(Lutz & KC 2011).
 
 **Marriage.** Singles meet partners among their contacts. The chance of marriage rises with
 attraction, similar education and values, the other person's kindness and empathy, age-appropriate
 urgency, and collectivism (earlier, family-backed matches). Interfaith matches are blocked in proportion
-to religiosity × intolerance × community pressure. Interfaith marriages can lead the less devout partner
-to convert. **Divorce** risk rises when the bond is weak and is scaled by how accepted divorce is
+to the stronger of the two groups' endogamy (scaled by devotion) and to religiosity × intolerance ×
+community pressure. **Matchmaking**: families and congregations keep a "board" of their single
+adults and introduce them across town, more often the scarcer the group is locally and the more it
+marries within itself; without this, small endogamous minorities could not find partners and would
+shrink for the wrong reason. Interfaith marriages can lead the less devout partner to convert, more
+often when the partner's group gains converts and the convert's group keeps members weakly.
+A child of a mixed couple usually takes the father's faith where custom is patrilineal (collectivism),
+weighted by how firmly each parent's group keeps its members. **Divorce** risk rises when the bond is weak and is scaled by how accepted divorce is
 (social liberalism, low religiosity, individualism, women's rights). Bonds strengthen with
 agreeableness and shared values and weaken with poverty, unemployment and an aggressive partner.
 
@@ -82,6 +98,36 @@ agreeableness and shared values and weaken with poverty, unemployment and an agg
 level of development supports. Emigration rises with unhappiness, education, openness, fear, war and
 discrimination (brain drain: Docquier & Rapoport 2012). Immigrants and refugees arrive through events,
 with their own faith, education and wealth profile.
+
+**Faith switching.** Most religious change happens between 15 and 35 (Pew 2022, *Modeling the Future of
+Religion in America*). Once a year, a young adult leaves their group with probability
+0.045 × (1 − retention) × (lukewarmness relative to the group) × (secularism of society) × (freedom:
+apostasy is rare under theocracy and in tight collectivist societies); much less after 35. Leavers
+mostly become "nones" where a non-religious group exists and values are liberal; otherwise they join
+another faith, which needs a group that seeks converts (*outreach*). The non-religious join a faith
+at the matching rate, usually their partner's or parents', or the most present and active group
+around them. Devout friends of another faith can also persuade. Every switch is counted in the
+group flows the Groups tab shows.
+
+### Faith profiles (`faiths.ts`)
+
+A group can take its starting values from a **profile**: a real tradition in a region (about 30:
+Christianity in Western Europe, the US, Latin America, Africa, the Middle East and South Asia;
+Evangelicals; Islam in the Middle East, South Asia, South-East Asia, Europe, the US and West Africa;
+Hinduism in India and the diaspora; Sikhism; Buddhism in East and South-East Asia; Judaism in
+Israel, the diaspora and Haredi communities; folk religions; the non-religious in the West and East
+Asia; and historical versions). A profile sets religiosity, literal ↔ flexible interpretation,
+family-size norm, retention, outreach, endogamy, schooling and wealth relative to the national
+average, and age structure, each with its source (Pew Research reports, national censuses and
+surveys such as NFHS-5 and the Nigeria DHS). Profiles carry no character traits: honesty,
+aggression or intelligence by religion are not supported by evidence, and violence in the model
+comes only from grievance, humiliation and networks. Tolerance starts equal for every profile,
+because measured intergroup tolerance depends mostly on the country and its history; presets set
+it per country.
+
+**Group norms.** A close-knit group is its members' main reference group: conformity pulls a member's
+devotion toward the group's norm (half its current mean, half its tradition), and social views partly
+toward the group's mean, in proportion to the group's endogamy.
 
 ## 4. Education and work
 
@@ -160,6 +206,20 @@ contact lowers it (Allport 1954; Pettigrew & Tropp 2006 meta-analysis; Mousa 202
 **Norms and social approval.** People drift toward their neighbourhood's average values, more in
 collectivist societies and more for less open people (Asch 1956; Hofstede 2001). Deviating from local
 norms costs life satisfaction in proportion to collectivism. This is the "social approval" force.
+
+**Formative views.** Social influence alone would make everyone agree eventually. In real societies
+views stay diverse because they are rooted in personality and position and settle in youth. Until 25,
+social, economic, authority and national views lean toward the group's norm plus personal anchors
+(openness → liberal social views; conscientiousness, wealth → conservative and pro-market views:
+Gerber et al. 2010; plus an idiosyncratic component); at 25 they are stored as *core views*, and
+adults are pulled back toward them (impressionable years: Krosnick & Alwin 1989; Ghitza & Gelman
+2014). Small random noise keeps a spread (Mäs, Flache & Helbing 2010). Society-wide change therefore
+comes mostly through generational replacement, as Inglehart (1977) described.
+
+**Ideology camps.** Each adult is placed in the camp they lean to most: religious traditionalists
+(devout and socially conservative), nationalists (national pride and a wish for a strong leader),
+secular progressives, socialists, market liberals, or moderates when no leaning is strong. A camp
+defined by two views scores the weaker of the two.
 
 **Media and trends.** Sustained pushes (consumerism, patriotism, religion, liberalism, capitalism,
 authority, tolerance) reach people according to literacy, city life and development.
@@ -325,10 +385,12 @@ event-frequency slider scales them all, and you can switch them off.
 ## 11. Forecasts
 
 `forecast.ts` exports a representative sample of today's society (households kept together, weights
-scaled up), then simulates N independent futures with different random seeds. Each indicator is
-summarized by its 10th, 50th and 90th percentiles per year, and outcomes (revolution, coup, civil
-war, war, terror, recession, ending as a democracy or a dictatorship, population decline) as the
-share of futures in which they happen. A *what-if* branch applies an intervention at the start and
+scaled up), then simulates N independent futures with different random seeds. Each indicator,
+each faith group's share and each ideology camp's share is summarized by its 10th, 50th and 90th
+percentiles per year. Outcomes are the share of futures in which they happen: revolution, coup, civil
+war, war, terror, recession, ending as a democracy or a dictatorship, population decline; and for
+each group, growing its share, being the largest at the end, holding a majority, and overtaking
+today's largest group (with the median year it happens). A *what-if* branch applies an intervention at the start and
 uses the **same seeds** as the baseline, so differences come from the intervention rather than luck
 (common random numbers).
 
@@ -353,14 +415,32 @@ used during calibration:
 These are coarse ranges, not point estimates. The model is meant for exploring *mechanisms* and
 *relative* effects of conditions and interventions.
 
+**Group projections.** `scripts/groups.ts` prints each group's share every five years and its
+fertility, median age, schooling, wealth and yearly flows. The present-day presets were tuned against
+published projections; typical 25-year results (one run, 20,000 people):
+
+| Preset | Simulated (2025 → 2050) | Published projection |
+|---|---|---|
+| Western Europe, no migration | Muslims 6.0% → 8.3–8.5%; non-religious 27% → 37% | Pew 2017 zero-migration: 4.9% → 7.4% (2016–2050) |
+| Western Europe, medium migration | Muslims 6.0% → 9.7–10.4% | Pew 2017 medium: 11.2% by 2050 |
+| India | Muslims 14.4% → 16–20%; TFR about 2 falling to 1.7 | Pew 2015: 18.4% by 2050; NFHS-5 TFR 1.94 (Hindu), 2.36 (Muslim) |
+| Israel | Haredi 13% → 22%; TFR about 3 | Israel CBS: about a quarter by 2050 |
+| Nigeria | Muslims 50% → 53%; TFR about 5.5 | Pew 2015: 58.5% by 2050 |
+| United States | Christians 64% → 62%, non-religious 30% → 33% | Pew 2022: Christians 46–54% by 2070 |
+
+Differences remain: Nigeria's simulated economy grows slowly, so its fertility stays high for both
+groups and the gap between them is smaller than in the survey data; American switching out of
+Christianity is slower than in Pew's scenarios.
+
 ## Known simplifications
 
 - One country, no foreign actors. Wars are a mobilization, casualties and economic shock with a
   random outcome weighted by military strength.
 - One tick is one month, so fast processes (epidemic generations, riots) are compressed.
 - Households are approximated by partners pooling wealth and children living with their mother.
-- Faith groups are abstract; the model knows nothing of specific doctrines, only devotion,
-  interpretation and tolerance.
+- Faith profiles are measurable tendencies, not doctrines: devotion, interpretation, family size,
+  retention, outreach, endogamy, schooling, wealth and age. Group differences within a tradition
+  (denominations, sects, ethnicity) appear only if you create them as separate groups.
 - Party systems always have four clusters.
 - Parameter values are chosen to match aggregate patterns and published effect directions. They are
   not estimated from any single dataset.
@@ -376,15 +456,15 @@ Chenoweth & Stephan (2011) *Why Civil Resistance Works* · Clark (2007) *A Farew
 Clark & Oswald (1994) *Economic Journal* · Cutler, Deaton & Lleras-Muney (2006) *JEP* ·
 Deffuant et al. (2000) *Advances in Complex Systems* · Docquier & Rapoport (2012) *JEL* · Downs (1957) ·
 Durkheim (1897) *Suicide* · Fagereng et al. (2020) *Econometrica* · Fajnzylber, Lederman & Loayza (2002) *J. Law & Economics* ·
-Fowler & Christakis (2008) *BMJ* · Funke, Schularick & Trebesch (2016) *EER* · Gabaix (1999) *QJE* ·
+Fowler & Christakis (2008) *BMJ* · Gerber et al. (2010) Personality and Political Attitudes, *APSR* · Ghitza & Gelman (2014) *The Great Society, Reagan's Revolution, and Generations of Presidential Voting* · Funke, Schularick & Trebesch (2016) *EER* · Gabaix (1999) *QJE* ·
 Goldstone (1991) *Revolution and Rebellion* · Gottfredson & Hirschi (1990) · Granovetter (1978) *AJS* ·
 Gurr (1970) *Why Men Rebel* · Hegselmann & Krause (2002) *JASSS* · Henrich & Gil-White (2001) *Evolution & Human Behavior* ·
-Hofstede (2001) · Inglehart & Welzel (2005) · Jedwab, Johnson & Koyama (2022) *JEL* · Jones & Olken (2005) *QJE* ·
+Hofstede (2001) · Inglehart (1977) *The Silent Revolution* · Inglehart & Welzel (2005) · Jedwab, Johnson & Koyama (2022) *JEL* · Jones & Olken (2005) *QJE* ·
 Kaufmann (2010) *Shall the Religious Inherit the Earth?* · Krosnick & Alwin (1989) *JPSP* · Kruglanski et al. (2014) *Political Psychology* ·
-Kuran (1991) *World Politics* · Levitsky & Ziblatt (2018) · Lipset (1959) *APSR* · Lutz & KC (2011) *Science* ·
+Kuran (1991) *World Politics* · Levitsky & Ziblatt (2018) · Lipset (1959) *APSR* · Lutz & KC (2011) *Science* · Mäs, Flache & Helbing (2010) *PLoS Comput. Biol.* ·
 McCauley & Moskalenko (2008) *Terrorism & Political Violence* · McPherson et al. (2001) *Annual Review of Sociology* ·
 Mousa (2020) *Science* · Norris & Inglehart (2011) *Sacred and Secular*; (2019) *Cultural Backlash* · Pape (2005) *Dying to Win* ·
-Pettigrew & Tropp (2006) *JPSP* · Piketty (2014) · Powell & Thyne (2011) *JPR* · Preston (1975) *Population Studies* ·
+Pettigrew & Tropp (2006) *JPSP* · Pew Research Center (2015) *The Future of World Religions*; (2017) *Europe's Growing Muslim Population*; (2021) *Religion in India*; (2022) *Modeling the Future of Religion in America* · Piketty (2014) · Powell & Thyne (2011) *JPR* · Preston (1975) *Population Studies* ·
 Przeworski et al. (2000) · Reinhart & Rogoff (2009) · Riley (2001) *Rising Life Expectancy* · Sageman (2004) ·
 Schelling (1971) *J. Mathematical Sociology* · Sen (1981) *Poverty and Famines* · Turchin (2016) *Ages of Discord* ·
 VanderWeele et al. (2016) *JAMA Psychiatry* · Watts & Strogatz (1998) *Nature* · Wood & Porter (2019) *Political Behavior* ·

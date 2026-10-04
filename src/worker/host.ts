@@ -6,7 +6,7 @@ import { Simulation } from '../sim/engine';
 import { MAX_FAITHS, WORLD_H, WORLD_W } from '../sim/constants';
 import { TEMPLATE_BY_ID, type EventSpec } from '../sim/events';
 import { runForecast } from '../sim/forecast';
-import { SERIES } from '../sim/stats';
+import { CAMPS, SERIES } from '../sim/stats';
 import type { FrameState, FromWorker, ToWorker } from './protocol';
 
 export type Poster = (msg: FromWorker, transfer: Transferable[]) => void;
@@ -45,7 +45,8 @@ function rowFor(s: Simulation): Record<string, number> {
   const L = s.latest;
   const row: Record<string, number> = {};
   for (const d of SERIES) row[d.key] = L[d.key] ?? NaN;
-  for (let f = 0; f < s.K; f++) row['faith' + f] = s.faithShareNow[f];
+  for (let f = 0; f < s.K; f++) { row['faith' + f] = s.faithShareNow[f]; row['tfrF' + f] = L['tfrF' + f] ?? NaN; }
+  for (let k = 0; k < CAMPS.length; k++) row['camp' + k] = L['camp' + k] ?? NaN;
   for (let k = 0; k < s.S.parties.length; k++) row['party' + k] = s.S.parties[k].share;
   return row;
 }
@@ -65,6 +66,29 @@ function findUid(uid: number): number {
   const A = sim.A;
   for (let i = 0; i < A.n; i++) if (A.alive[i] && A.uid[i] === uid) return i;
   return -1;
+}
+
+/** Per faith group: what drives its growth, from the last full year of the simulation. */
+function groupStats(s: Simulation): FrameState['groups'] {
+  const K = s.K;
+  const perK = (f: number, k: number) => {
+    const members = s.faithShareNow[f] * s.A.live;
+    return members > 0 ? (s.flowsLast[f * 6 + k] / members) * 1000 : 0;
+  };
+  const out: FrameState['groups'] = { members: [], start: [], tfr: [], medianAge: [], edu: [], wealth: [], natural: [], switching: [], migration: [], campStart: [] };
+  for (let f = 0; f < K; f++) {
+    out.members.push(s.faithShareNow[f] * s.A.live * s.popScale);
+    out.start.push(s.faithStart[f]);
+    out.tfr.push(s.faithTFR[f]);
+    out.medianAge.push(s.faithMedianAge[f]);
+    out.edu.push(s.faithEdu[f]);
+    out.wealth.push(s.faithWealthRel[f]);
+    out.natural.push(perK(f, 0) - perK(f, 1));
+    out.switching.push(perK(f, 2) - perK(f, 3));
+    out.migration.push(perK(f, 4) - perK(f, 5));
+  }
+  out.campStart = Array.from(s.campStart);
+  return out;
 }
 
 function frameState(s: Simulation): FrameState {
@@ -90,6 +114,7 @@ function frameState(s: Simulation): FrameState {
     },
     faithShares: Array.from(s.faithShareNow.slice(0, s.K)),
     faithStats,
+    groups: groupStats(s),
     events: s.events.map((e) => {
       const dur = Math.max(1, Math.round(e.spec.duration));
       const m = s.t - e.start;

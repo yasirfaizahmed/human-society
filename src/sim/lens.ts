@@ -18,6 +18,7 @@ export const LENSES: LensDef[] = [
   { id: 'faith', label: 'Faith group', kind: 'categorical', group: 'Identity' },
   { id: 'occupation', label: 'Occupation', kind: 'categorical', group: 'Identity' },
   { id: 'age', label: 'Age', kind: 'sequential', low: '0', high: '90+', group: 'Identity' },
+  { id: 'camp', label: 'Ideology camp', kind: 'categorical', group: 'Identity' },
   { id: 'vote', label: 'Party supported', kind: 'categorical', group: 'Politics' },
   { id: 'protest', label: 'Protest & unrest', kind: 'categorical', group: 'Politics' },
   { id: 'social', label: 'Social values', kind: 'diverging', low: 'Traditional', high: 'Progressive', group: 'Politics' },

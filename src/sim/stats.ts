@@ -116,3 +116,33 @@ export function lifeExpectancy(deaths: Float64Array, exposure: Float64Array): nu
   }
   return e;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Ideology camps: adults grouped by their combination of values (first matching rule wins).
+// ---------------------------------------------------------------------------------------------
+
+export const CAMPS = [
+  { id: 'religiousTrad', label: 'Religious traditionalists', color: '#2f9e6e', help: 'Devout and socially conservative' },
+  { id: 'nationalist', label: 'Nationalists', color: '#d0453f', help: 'Strong national pride and a wish for order and a strong leader' },
+  { id: 'progressive', label: 'Secular progressives', color: '#7b6fe0', help: 'Socially liberal and not very religious' },
+  { id: 'socialist', label: 'Socialists', color: '#e0782e', help: 'Want strong redistribution' },
+  { id: 'marketLiberal', label: 'Market liberals', color: '#3987e5', help: 'Favour free markets' },
+  { id: 'moderate', label: 'Moderates', color: '#8b8a84', help: 'No strong leaning' },
+] as const;
+
+/**
+ * The camp a person leans to most: each camp scores how far its defining views are from the
+ * centre (a camp defined by two views takes the weaker of the two), and weak leanings are moderate.
+ */
+export function campOf(relig: number, social: number, econ: number, auth: number, patriot: number): number {
+  let best = 5, bs = 0.13;
+  const sc = [
+    Math.min(relig - 0.5, 0.5 - social),
+    Math.min(patriot - 0.5, auth - 0.5),
+    Math.min(social - 0.5, 0.5 - relig),
+    0.5 - econ,
+    econ - 0.5,
+  ];
+  for (let k = 0; k < 5; k++) if (sc[k] > bs) { bs = sc[k]; best = k; }
+  return best;
+}

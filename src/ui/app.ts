@@ -1,6 +1,7 @@
 // The running simulation: map, indicators and the side panels.
 
 import type { ScenarioConfig } from '../sim/config';
+import { FAITH_PROFILE_BY_ID } from '../sim/faiths';
 import { OCC_NAMES, DEATH_NAMES } from '../sim/constants';
 import type { Leader, NewsItem, PersonInfo } from '../sim/engine';
 import {
@@ -10,7 +11,7 @@ import {
 import { FORECAST_KEYS, type ForecastRequest, type ForecastResult } from '../sim/forecast';
 import { LENSES, LENS_BY_ID, LOVE_LABELS, OCC_COLORS, PROTEST_COLORS, DISEASE_COLORS, cssRamp, lensPalette } from '../sim/lens';
 import { describeIdeology } from '../sim/politics';
-import { SERIES, SERIES_BY_KEY, compact, fmtValue, type Fmt } from '../sim/stats';
+import { CAMPS, SERIES, SERIES_BY_KEY, compact, fmtValue, type Fmt } from '../sim/stats';
 import type { Settlement } from '../sim/world';
 import type { FrameState, FromWorker, ToWorker } from '../worker/protocol';
 import { FanChart, LineChart, drawCompass, drawPyramid, seriesColor, sparkline } from './charts';
@@ -52,9 +53,10 @@ function spawnHost(): HostLike {
   }
 }
 
-type Tab = 'overview' | 'charts' | 'events' | 'policy' | 'people' | 'forecast' | 'chronicle';
+type Tab = 'groups' | 'overview' | 'charts' | 'events' | 'policy' | 'people' | 'forecast' | 'chronicle';
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'groups', label: 'Groups' },
+  { id: 'overview', label: 'Politics' },
   { id: 'charts', label: 'Trends' },
   { id: 'events', label: 'Events' },
   { id: 'policy', label: 'Policy' },
@@ -96,7 +98,7 @@ export class App {
   private running = false;
   private speed = 6;
   private lens = 'faith';
-  private tab: Tab = 'overview';
+  private tab: Tab = 'groups';
   private lastPanelUpdate = 0;
   private lastKpiUpdate = 0;
   private perf = { msPerTick: 0, ticksPerSecond: 0 };
@@ -380,6 +382,7 @@ export class App {
     switch (this.lens) {
       case 'faith': return { colors: this.scenario.population.faiths.map((f) => f.color), labels: this.scenario.population.faiths.map((f) => f.name) };
       case 'occupation': return { colors: OCC_COLORS, labels: OCC_NAMES };
+      case 'camp': return { colors: [...CAMPS.map((c) => c.color), '#4b5563'], labels: [...CAMPS.map((c) => c.label), 'Children'] };
       case 'vote': {
         const parties = this.state?.S.parties ?? [];
         return { colors: parties.map((p) => p.color), labels: parties.map((p) => p.name) };
@@ -479,6 +482,7 @@ export class App {
 
   private buildPanel(tab: Tab): { el: HTMLElement; update: () => void } {
     switch (tab) {
+      case 'groups': return this.groupsPanel();
       case 'overview': return this.overviewPanel();
       case 'charts': return this.chartsPanel();
       case 'events': return this.eventsPanel();
@@ -600,6 +604,139 @@ export class App {
         const dl = h('div', { class: 'glance' });
         st.deathCauses.forEach((v, i) => { if (v > 0) dl.append(h('div', { class: 'gl' }, h('span', { class: 'muted' }, DEATH_NAMES[i]), h('b', {}, `${(v / dtot * 100).toFixed(1)}%`))); });
         el.append(h('div', { class: 'card' }, h('h3', {}, 'Causes of death so far'), dl));
+      }
+    };
+    return { el, update };
+  }
+
+  // ---------- Groups: who grows, and why ----------
+  private groupsPanel() {
+    const el = h('div', { class: 'pane' });
+    const summary = h('div', { class: 'card hero-card' });
+    const shareHost = h('div', {});
+    const shareChart = new LineChart(shareHost, 190, { stacked: true, zeroBased: true });
+    const tableWrap = h('div', { class: 'table-wrap' });
+    const campBars = h('div', { class: 'bars' });
+    const campHost = h('div', {});
+    const campChart = new LineChart(campHost, 170, { stacked: true, zeroBased: true });
+    const profiles = h('div', { class: 'profiles' });
+    el.append(
+      summary,
+      h('div', { class: 'card' }, h('h3', {}, 'Share of the population'), shareHost),
+      h('div', { class: 'card' },
+        h('h3', {}, 'Why each group grows or shrinks'),
+        h('p', { class: 'muted small' }, 'Per 1,000 members over the last full year. A group grows through more births than deaths (fertility and a young age structure), through people joining it, and through migration.'),
+        tableWrap,
+      ),
+      h('div', { class: 'card' },
+        h('h3', {}, 'Ideologies'),
+        h('p', { class: 'muted small' }, 'Adults grouped by the views they lean to most. Change is shown since the simulation started.'),
+        campBars, campHost,
+      ),
+      h('div', { class: 'card' }, h('h3', {}, 'The groups in this society'), profiles),
+    );
+    let profilesFor = '';
+    const update = () => {
+      const st = this.state;
+      const faiths = this.scenario.population.faiths;
+      if (!st) { clear(summary); summary.append(h('p', { class: 'empty' }, 'Generating the population…')); return; }
+      const G = st.groups;
+      const K = faiths.length;
+      const startYear = this.scenario.society.startYear;
+      const n = this.histT.length;
+      const x = new Float64Array(n);
+      for (let i = 0; i < n; i++) x[i] = startYear + this.histT[i] / 12;
+      shareChart.set(x, faiths.map((f, i) => ({ label: f.name, values: this.hist['faith' + i] ?? [], color: f.color })), 'pct');
+      campChart.set(x, CAMPS.map((c, k) => ({ label: c.label, values: this.hist['camp' + k] ?? [], color: c.color })), 'pct');
+      // growth of each group's numbers over the last (up to) ten years
+      const growth = groupGrowth(this.histT, this.hist, K);
+      const shares = st.faithShares;
+      const order = shares.map((_, i) => i).sort((a, b) => shares[b] - shares[a]);
+      const leader = order[0];
+      clear(summary);
+      summary.append(h('p', { class: 'eyebrow' }, `${st.year} · ${MONTHS[st.month]}`));
+      if (!growth) {
+        summary.append(h('h2', {}, `${faiths[leader].name} ${pct1(shares[leader])}`), h('p', { class: 'muted' }, 'Let the simulation run a year or two to see which groups are growing.'));
+      } else {
+        const ranked = growth.rate.map((r, i) => i).filter((i) => shares[i] > 0.002).sort((a, b) => growth.rate[b] - growth.rate[a]);
+        const fastest = ranked[0];
+        const slowest = ranked[ranked.length - 1];
+        const shareRate = (i: number) => growth.rate[i] - growth.total;
+        summary.append(
+          h('h2', {}, shareRate(fastest) > 0.001 ? `${faiths[fastest].name} are growing fastest` : 'Group shares are stable'),
+          h('p', { class: 'muted' }, `${describeRate(faiths[fastest].name, growth.rate[fastest], G.tfr[fastest], G.medianAge[fastest])} ${slowest !== fastest ? describeRate(faiths[slowest].name, growth.rate[slowest], G.tfr[slowest], G.medianAge[slowest]) : ''}`),
+        );
+        const proj = projectShares(shares, growth.rate, growth.total, 200);
+        const horizon = [25, 50];
+        const outlook = h('div', { class: 'glance' });
+        for (const yrs of horizon) {
+          for (const i of order.slice(0, 4)) {
+            outlook.append(h('div', { class: 'gl' }, h('span', { class: 'muted' }, `${faiths[i].name} in ${st.year + yrs}`), h('b', {}, pct1(proj.shares[yrs][i]))));
+          }
+        }
+        const cross = proj.overtake;
+        summary.append(
+          h('h3', {}, `If the last ${growth.years} years' trends simply continued`),
+          outlook,
+          h('p', { class: 'muted small' }, cross
+            ? `${faiths[cross.who].name} would overtake ${faiths[leader].name} as the largest group around ${st.year + cross.years}.`
+            : `${faiths[leader].name} would stay the largest group for at least 200 years.`),
+          h('p', { class: 'help' }, 'This straight-line extrapolation assumes today\'s birth, switching and migration rates never change. In reality fertility falls as people study longer and move to cities, so use the Forecast tab to simulate many full futures.'),
+        );
+      }
+      // table of growth components
+      clear(tableWrap);
+      const signed = (v: number) => (isFinite(v) ? `${v > 0.05 ? '+' : v < -0.05 ? '−' : ''}${Math.abs(v).toFixed(1)}` : '–');
+      const tone = (v: number) => (v > 0.5 ? 'pos' : v < -0.5 ? 'neg' : '');
+      tableWrap.append(h('table', { class: 'odds groups-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'Group'), h('th', {}, 'Share'), h('th', { title: 'Change in share since the simulation started (percentage points)' }, 'Since start'), h('th', { title: 'Children per woman' }, 'Children'), h('th', {}, 'Median age'), h('th', { title: 'Births minus deaths per 1,000 members' }, 'Births − deaths'), h('th', { title: 'People joining minus people leaving, per 1,000 members' }, 'Switching'), h('th', { title: 'Immigrants minus emigrants per 1,000 members' }, 'Migration'))),
+        h('tbody', {}, ...order.map((i) => {
+          const d = (shares[i] - (G.start[i] ?? 0)) * 100;
+          return h('tr', {},
+            h('td', {}, h('span', { class: 'bar-label' }, h('i', { style: `background:${faiths[i].color}` }), faiths[i].name)),
+            h('td', {}, pct1(shares[i])),
+            h('td', { class: tone(d * 2) }, `${d >= 0.05 ? '+' : d <= -0.05 ? '−' : ''}${Math.abs(d).toFixed(1)}`),
+            h('td', {}, isFinite(G.tfr[i]) ? G.tfr[i].toFixed(2) : '–'),
+            h('td', {}, isFinite(G.medianAge[i]) ? G.medianAge[i].toFixed(0) : '–'),
+            h('td', { class: tone(G.natural[i]) }, signed(G.natural[i])),
+            h('td', { class: tone(G.switching[i]) }, signed(G.switching[i])),
+            h('td', { class: tone(G.migration[i]) }, signed(G.migration[i])),
+          );
+        })),
+      ));
+      // ideology camps
+      clear(campBars);
+      const camps = CAMPS.map((_, k) => st.latest['camp' + k] ?? 0);
+      const corder = camps.map((_, k) => k).sort((a, b) => camps[b] - camps[a]);
+      for (const k of corder) {
+        const c = CAMPS[k];
+        const d = (camps[k] - (G.campStart[k] ?? 0)) * 100;
+        campBars.append(h('div', { class: 'bar-row camp-row', title: c.help },
+          h('div', { class: 'bar-label' }, h('i', { style: `background:${c.color}` }), c.label),
+          h('div', { class: 'bar' }, h('div', { class: 'bar-fill', style: `width:${(camps[k] * 100).toFixed(1)}%;background:${c.color}` })),
+          h('div', { class: 'bar-val' }, `${(camps[k] * 100).toFixed(0)}%`),
+          h('div', { class: 'bar-delta ' + (d > 0.5 ? 'pos' : d < -0.5 ? 'neg' : '') }, `${d >= 0.5 ? '▲' : d <= -0.5 ? '▼' : ''} ${Math.abs(d).toFixed(0)} pts`),
+        ));
+      }
+      // profiles (rebuilt only when the numbers change meaningfully)
+      const sig = faiths.map((_, i) => `${G.edu[i]?.toFixed(1)}|${G.wealth[i]?.toFixed(2)}`).join(',');
+      if (sig !== profilesFor) {
+        profilesFor = sig;
+        clear(profiles);
+        for (const i of order) {
+          const f = faiths[i];
+          const prof = f.profile ? FAITH_PROFILE_BY_ID[f.profile] : undefined;
+          profiles.append(h('div', { class: 'profile' },
+            h('div', { class: 'bar-label' }, h('i', { style: `background:${f.color}` }), h('b', {}, f.name), prof ? h('span', { class: 'muted' }, ` · ${prof.tradition}, ${prof.context}`) : h('span', { class: 'muted' }, ' · custom group')),
+            h('div', { class: 'glance' },
+              h('div', { class: 'gl' }, h('span', { class: 'muted' }, 'People'), h('b', {}, compact(G.members[i] ?? 0))),
+              h('div', { class: 'gl' }, h('span', { class: 'muted' }, 'Schooling (adults)'), h('b', {}, isFinite(G.edu[i]) ? `${G.edu[i].toFixed(1)} yrs` : '–')),
+              h('div', { class: 'gl' }, h('span', { class: 'muted' }, 'Wealth vs average'), h('b', {}, isFinite(G.wealth[i]) ? `${G.wealth[i].toFixed(2)}×` : '–')),
+              h('div', { class: 'gl' }, h('span', { class: 'muted' }, 'Devotion'), h('b', {}, (st.faithStats[i]?.relig ?? 0).toFixed(2))),
+            ),
+            f.note ? h('p', { class: 'help' }, f.note) : null,
+          ));
+        }
       }
     };
     return { el, update };
@@ -970,6 +1107,7 @@ export class App {
       h('div', { class: 'card' }, h('h3', {}, 'Society'),
         add('genderEquality', 'Gender equality', 'Patriarchal', 'Equal', (st) => S(st).genderEquality),
         add('contraception', 'Access to contraception', 'None', 'Universal', (st) => S(st).contraception),
+        add('familyPlanning', 'Family-planning programmes', 'None', 'Strong', (st) => st.latest.familyPlanning ?? 0),
         add('minorityBias', 'Discrimination against minorities', 'None', 'Severe', (st) => S(st).minorityBias),
         add('immigration', 'Openness to immigrants', 'Closed', 'Open', (st) => S(st).immigration),
         add('collectivism', 'Collectivism', 'Individualist', 'Collectivist', (st) => S(st).collectivism),
@@ -1061,7 +1199,7 @@ export class App {
     const req = this.fcReq;
     const iv = this.fcIntervention;
     const ivTarget = iv.target;
-    let metric = 'democracy';
+    let metric = 'faith0';
     const status = h('p', { class: 'muted', 'aria-live': 'polite' });
     const results = h('div', {});
     const ivOpts = [{ value: '', label: 'No intervention (baseline only)' }, ...Object.entries(CATEGORY_LABELS).flatMap(([c, label]) => TEMPLATES.filter((t) => t.category === c).map((t) => ({ value: t.id, label: `${label} — ${t.name}` })))];
@@ -1104,20 +1242,71 @@ export class App {
         h('thead', {}, h('tr', {}, h('th', {}, `Chance within ${r.years} years`), ...branches.map((b) => h('th', {}, b.label)))),
         h('tbody', {}, ...Object.keys(labels).map((k) => h('tr', {}, h('td', {}, labels[k]), ...branches.map((b) => h('td', {}, `${Math.round((b.outcomes[k] ?? 0) * 100)}%`))))),
       );
-      results.append(h('div', { class: 'card' },
-        h('h3', {}, `${r.runs} futures from ${r.startYear} to ${r.startYear + r.years}`),
-        h('p', { class: 'muted small' }, `Each future simulates ${compact(r.sample)} representative people. Percentages are shares of futures.`),
-        h('div', { class: 'table-wrap' }, table),
-      ));
+      // which groups and ideologies grow
+      const end = r.years;
+      const endYear = r.startYear + r.years;
+      const range = (b: number[] | undefined) => (b ? `${pct1(b[1])} (${pct1(b[0]).replace('%', '')}–${pct1(b[2])})` : '–');
+      const p = (v: number | undefined) => `${Math.round((v ?? 0) * 100)}%`;
+      const gOrder = r.faithStart.map((_, i) => i).sort((a, b) => r.faithStart[b] - r.faithStart[a]);
+      // one value per branch: the baseline, and below it the value with the intervention
+      const both = (fn: (b: typeof branches[number]) => string): HTMLElement | string => branches.length === 1 ? fn(branches[0])
+        : h('span', { class: 'two' }, h('span', {}, fn(branches[0])), h('span', { class: 'alt' }, fn(branches[1])));
+      const overtakeText = (b: typeof branches[number], i: number) => { const o = b.faithOvertake[i]; return o && o.prob > 0 ? `${p(o.prob)}${o.medianYear ? ` (~${o.medianYear})` : ''}` : '–'; };
+      const groupTable = h('table', { class: 'odds groups-table' },
+        h('thead', {}, h('tr', {},
+          h('th', {}, 'Group'), h('th', {}, 'Today'),
+          h('th', { title: 'Median share, with the range 8 in 10 futures fall into' }, `In ${endYear}`),
+          h('th', { title: 'Share of futures in which the group\'s share grows' }, 'Grows'),
+          h('th', { title: 'Share of futures in which it is the largest group at the end' }, 'Largest'),
+          h('th', { title: 'Share of futures in which it holds over half the population at the end' }, 'Majority'),
+          h('th', { title: 'Share of futures in which it overtakes today\'s largest group, and the median year' }, 'Overtakes'),
+        )),
+        h('tbody', {}, ...gOrder.map((i) => h('tr', {},
+          h('td', {}, h('span', { class: 'bar-label' }, h('i', { style: `background:${r.faithColors[i]}` }), r.faithNames[i])),
+          h('td', {}, pct1(r.faithStart[i])),
+          h('td', {}, both((b) => range(b.bands['faith' + i]?.[end]))),
+          h('td', {}, both((b) => p(b.faithGrows[i]))),
+          h('td', {}, both((b) => p(b.faithLargest[i]))),
+          h('td', {}, both((b) => p(b.faithMajority[i]))),
+          h('td', {}, both((b) => overtakeText(b, i))),
+        ))),
+      );
+      const cOrder = r.campStart.map((_, k) => k).sort((a, b) => r.campStart[b] - r.campStart[a]);
+      const campTable = h('table', { class: 'odds groups-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'Ideology'), h('th', {}, 'Today'), h('th', {}, `In ${endYear}`), h('th', { title: 'Share of futures in which this camp is the largest at the end' }, 'Leads at the end'))),
+        h('tbody', {}, ...cOrder.map((k) => h('tr', {},
+          h('td', {}, h('span', { class: 'bar-label' }, h('i', { style: `background:${CAMPS[k].color}` }), CAMPS[k].label)),
+          h('td', {}, pct1(r.campStart[k])),
+          h('td', {}, both((b) => range(b.bands['camp' + k]?.[end]))),
+          h('td', {}, both((b) => p(b.campLargest[k]))),
+        ))),
+      );
+      results.append(
+        h('div', { class: 'card' },
+          h('h3', {}, `Which groups grow by ${endYear}`),
+          h('p', { class: 'muted small' }, `${r.runs} futures, each with ${compact(r.sample)} representative people. Shares are medians with the range 8 in 10 futures fall into; the other columns are shares of futures.${branches.length > 1 ? ' In each cell the top line is the baseline and the coloured line is with the intervention.' : ''}`),
+          h('div', { class: 'table-wrap' }, groupTable),
+        ),
+        h('div', { class: 'card' }, h('h3', {}, `Which ideology leads by ${endYear}`), h('div', { class: 'table-wrap' }, campTable)),
+        h('div', { class: 'card' },
+          h('h3', {}, `${r.runs} futures from ${r.startYear} to ${endYear}`),
+          h('p', { class: 'muted small' }, `Percentages are shares of futures.`),
+          h('div', { class: 'table-wrap' }, table),
+        ),
+      );
       const metricChips = h('div', { class: 'chips' });
       const fanHost = h('div', {});
       const fan = new FanChart(fanHost, 170);
+      const metricLabel = (k: string) => k.startsWith('faith') ? r.faithNames[Number(k.slice(5))] : k.startsWith('camp') ? CAMPS[Number(k.slice(4))].label : SERIES_BY_KEY[k]?.label ?? k;
+      const metricKeys = [...r.faithNames.map((_, i) => 'faith' + i), ...CAMPS.map((_, k) => 'camp' + k), ...FORECAST_KEYS];
+      if (!metricKeys.includes(metric)) metric = 'faith0';
       const draw = () => {
         clear(metricChips);
-        for (const k of FORECAST_KEYS) {
-          metricChips.append(h('button', { class: 'chip-btn' + (k === metric ? ' on' : ''), 'aria-pressed': k === metric ? 'true' : 'false', onclick: () => { metric = k; draw(); } }, SERIES_BY_KEY[k]?.label ?? k));
+        for (const k of metricKeys) {
+          metricChips.append(h('button', { class: 'chip-btn' + (k === metric ? ' on' : ''), 'aria-pressed': k === metric ? 'true' : 'false', onclick: () => { metric = k; draw(); } }, metricLabel(k)));
         }
-        fan.set(r.baseline.years, branches.map((b, i) => ({ label: b.label, bands: b.bands[metric], color: seriesColor(i === 0 ? 0 : 1) })), SERIES_BY_KEY[metric]?.fmt ?? 'num2');
+        const fmt = metric.startsWith('faith') || metric.startsWith('camp') ? 'pct1' : SERIES_BY_KEY[metric]?.fmt ?? 'num2';
+        fan.set(r.baseline.years, branches.map((b, i) => ({ label: b.label, bands: b.bands[metric], color: seriesColor(i === 0 ? 0 : 1) })), fmt);
       };
       results.append(h('div', { class: 'card' }, h('h3', {}, 'Range of outcomes'), h('p', { class: 'muted small' }, 'Line: the median future. Band: 8 in 10 futures fall inside it.'), metricChips, fanHost));
       draw();
@@ -1163,6 +1352,56 @@ export class App {
 // ------------------------------------------------------------------------------------------------
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function pct1(v: number): string {
+  return isFinite(v) ? `${(v * 100).toFixed(v < 0.1 ? 1 : 0)}%` : '–';
+}
+
+function describeRate(name: string, rate: number, tfr: number, medianAge: number): string {
+  const r = `${rate >= 0 ? '+' : '−'}${Math.abs(rate * 100).toFixed(1)}% a year`;
+  const why = [isFinite(tfr) ? `${tfr.toFixed(1)} children per woman` : '', isFinite(medianAge) ? `median age ${medianAge.toFixed(0)}` : ''].filter(Boolean).join(', ');
+  return `${name}: ${r}${why ? ` (${why})` : ''}.`;
+}
+
+/** Yearly growth rate of each group's numbers (and of the whole population) over the last ten years of history. */
+function groupGrowth(histT: number[], hist: Record<string, number[]>, K: number): { rate: number[]; total: number; years: number } | null {
+  const n = histT.length;
+  if (n < 2) return null;
+  const tNow = histT[n - 1];
+  if (tNow < 24) return null;
+  let j = n - 1;
+  while (j > 0 && histT[j - 1] >= tNow - 120) j--;
+  const years = (tNow - histT[j]) / 12;
+  if (years < 2) return null;
+  const pop = hist.pop ?? [];
+  const p0 = pop[j], p1 = pop[n - 1];
+  if (!(p0 > 0 && p1 > 0)) return null;
+  const rate: number[] = [];
+  for (let f = 0; f < K; f++) {
+    const s = hist['faith' + f] ?? [];
+    const a = s[j] * p0, b = s[n - 1] * p1;
+    rate.push(a > 0 && b > 0 ? Math.pow(b / a, 1 / years) - 1 : b > 0 ? 0.05 : -0.05);
+  }
+  return { rate, total: Math.pow(p1 / p0, 1 / years) - 1, years: Math.round(years) };
+}
+
+/** Straight-line extrapolation of group shares at constant growth rates. */
+function projectShares(shares: number[], rate: number[], _total: number, years: number): { shares: number[][]; overtake: { who: number; years: number } | null } {
+  const out: number[][] = [];
+  let cur = [...shares];
+  const leader = shares.indexOf(Math.max(...shares));
+  let overtake: { who: number; years: number } | null = null;
+  for (let y = 0; y <= years; y++) {
+    out.push(cur);
+    if (!overtake) {
+      for (let i = 0; i < cur.length; i++) if (i !== leader && cur[i] > cur[leader]) { overtake = { who: i, years: y }; break; }
+    }
+    const next = cur.map((s, i) => s * (1 + rate[i]));
+    const tot = next.reduce((a, b) => a + b, 0) || 1;
+    cur = next.map((v) => v / tot);
+  }
+  return { shares: out, overtake };
+}
 
 function meterRow(label: string, v: number, text: string, cls = ''): HTMLElement {
   const m = meter(v, cls);

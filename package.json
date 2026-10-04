@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "headless": "tsx scripts/headless.ts",
-    "sweep": "tsx scripts/sweep.ts"
+    "sweep": "tsx scripts/sweep.ts",
+    "groups": "tsx scripts/groups.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

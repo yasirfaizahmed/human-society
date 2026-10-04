@@ -23,7 +23,7 @@ import {
 } from './events';
 import { PARTY_COLORS, clusterParties, describeIdeology, ideoDist, partyName, type ElectionResult, type Party } from './politics';
 import { RNG, clamp, clamp01, hash01, lerp } from './rng';
-import { giniSorted, lifeExpectancy } from './stats';
+import { CAMPS, campOf, giniSorted, lifeExpectancy } from './stats';
 import { World, cellOf, personName } from './world';
 
 // ------------------------------------------------------------------------------------------------
@@ -148,6 +148,12 @@ export interface SocietyState {
 const OCC_PRESTIGE = [0.3, 0.5, 0.35, 0.5, 0.7, 0.95, 0.9, 1.3, 0.7, 0.6, 0.8, 0.25];
 const IS_EMPLOYED = [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0];
 const FERTILITY_SHAPE = [0.55, 0.95, 1.0, 0.9, 0.65, 0.3, 0.06]; // 15-19 … 45-49
+const SINGLES = 64; // size of each faith's matchmaking board (power of two)
+
+/** Effective use of birth control: low in poor agrarian societies, then rising steeply with development and women's status. */
+function contraceptionTarget(dev: number, genderEquality: number, familyPlanning: number): number {
+  return clamp01(0.03 + 0.85 * Math.pow(dev, 1.4) + 0.2 * genderEquality + 0.35 * familyPlanning);
+}
 
 // Accumulators reset every tick.
 class Acc {
@@ -164,11 +170,13 @@ class Acc {
   faith = new Float64Array(MAX_FAITHS);
   faithN = new Float64Array(MAX_FAITHS);
   faithRelig = new Float64Array(MAX_FAITHS);
+  faithSocial = new Float64Array(MAX_FAITHS);
   faithGriev = new Float64Array(MAX_FAITHS);
   faithExtrem = new Float64Array(MAX_FAITHS);
   faithToler = new Float64Array(MAX_FAITHS);
   faithWealth = new Float64Array(MAX_FAITHS);
   votes = new Float64Array(8);
+  camp = new Float64Array(CAMPS.length);
   occ = new Float64Array(12);
   medianAgeHist = new Float64Array(101);
   reset() {
@@ -221,6 +229,27 @@ export class Simulation {
   faithShareNow: Float64Array;
   secularFaith = -1;
   majorityFaith = 0;
+  // per-faith demographic parameters (copied from the configuration for speed)
+  fFert = new Float64Array(MAX_FAITHS);
+  /** Each faith group's mean religiosity and social views: the reference norms of its community. */
+  private fMeanRelig = new Float64Array(MAX_FAITHS);
+  private fNormRelig = new Float64Array(MAX_FAITHS);
+  private fMeanSocial = new Float64Array(MAX_FAITHS).fill(NaN);
+  fRet = new Float64Array(MAX_FAITHS);
+  fOut = new Float64Array(MAX_FAITHS);
+  fEndo = new Float64Array(MAX_FAITHS);
+  /** Flows this year per faith: births, deaths, converts in, converts out, immigrants, emigrants. */
+  flows = new Float64Array(MAX_FAITHS * 6);
+  /** The same flows for the last complete year. */
+  flowsLast = new Float64Array(MAX_FAITHS * 6);
+  private birthsByAgeF = new Float64Array(MAX_FAITHS * 35);
+  private womenByAgeF = new Float64Array(MAX_FAITHS * 35);
+  faithTFR = new Float64Array(MAX_FAITHS);
+  faithMedianAge = new Float64Array(MAX_FAITHS);
+  faithEdu = new Float64Array(MAX_FAITHS);
+  faithWealthRel = new Float64Array(MAX_FAITHS);
+  faithStart = new Float64Array(MAX_FAITHS);
+  campStart = new Float64Array(CAMPS.length);
 
   // spatial index
   cellStart = new Int32Array(NCELLS + 1);
@@ -283,6 +312,8 @@ export class Simulation {
   private lockdown = 0;
   private meanSocial = 0.5;
   private meanEcon = 0.5;
+  private meanAuth = 0.5;
+  private meanPatriot = 0.5;
   private ustar = 0.5;
   private ifrScale = 1;
   // event effects compiled for the agent loop
@@ -331,6 +362,13 @@ export class Simulation {
     const P = this.cfg.population;
     this.K = P.faiths.length;
     this.secularFaith = P.faiths.findIndex((f) => f.secular);
+    P.faiths.forEach((f, k) => {
+      this.fFert[k] = f.fertility ?? 0;
+      this.fRet[k] = f.retention ?? 0.75;
+      this.fOut[k] = f.outreach ?? 0.2;
+      this.fEndo[k] = f.endogamy ?? 0.6;
+      this.fMeanRelig[k] = this.fNormRelig[k] = f.secular ? 0.05 : f.religiosity;
+    });
     this.rng = new RNG(this.cfg.society.seed >>> 0);
     this.world = new World(this.rng, P.cities, P.urbanShare);
     this.faithShareNow = new Float64Array(MAX_FAITHS);
@@ -373,7 +411,7 @@ export class Simulation {
       democracy: Sc.democracy, ruleOfLaw: Sc.ruleOfLaw, pressFreedom: Sc.pressFreedom, repression: Sc.repression,
       securityLoyalty: Sc.securityLoyalty, marketFreedom: Sc.marketFreedom, taxRate: Sc.taxRate, progressivity: Sc.progressivity,
       welfare: Sc.welfare, eduAccess: Sc.eduAccess, healthSpend: Sc.healthSpend, military: Sc.military, policing: Sc.policing,
-      genderEquality: Sc.genderEquality, contraception: clamp01(0.85 * dev + 0.2 * Sc.genderEquality),
+      genderEquality: Sc.genderEquality, contraception: contraceptionTarget(dev, Sc.genderEquality, Sc.familyPlanning),
       minorityBias: Sc.minorityBias, immigration: Sc.immigration ?? 0.4, socialMedia: Sc.socialMedia, collectivism: Sc.collectivism,
       religiousPolicy: Sc.religiousPolicy, favoredFaith: Sc.favoredFaith, H: 0.5, legitimacy: 0.5,
       ruling: { ...Sc.ruling }, regimeLabel: '', regimeSince: 0, trends: { ...Sc.trends }, politicsEndogenous: Sc.politicsEndogenous,
@@ -400,11 +438,18 @@ export class Simulation {
       const mu = a < 5 ? this.childMu * (a < 1 ? 3 : 0.4) + this.gomp[a] : this.gomp[a];
       l *= Math.exp(-mu);
     }
-    const cdf = new Float64Array(101);
-    let tot = 0;
-    for (let a = 0; a <= 100; a++) { tot += Math.exp(-g * a) * surv[a]; cdf[a] = tot; }
-    for (let a = 0; a <= 100; a++) cdf[a] /= tot;
-    const sampleAge = () => {
+    // each faith group can be younger or older than average (e.g. Muslims in Europe: median age 30 vs 44)
+    const cdfs = P.faiths.map((fg) => {
+      const gf = lerp(-0.012, 0.034, clamp01(P.ageStructure + (fg.youth ?? 0)));
+      const cdf = new Float64Array(101);
+      let tot = 0;
+      for (let a = 0; a <= 100; a++) { tot += Math.exp(-gf * a) * surv[a]; cdf[a] = tot; }
+      for (let a = 0; a <= 100; a++) cdf[a] /= tot;
+      return cdf;
+    });
+    void g;
+    const sampleAge = (f: number) => {
+      const cdf = cdfs[f];
       const r = rng.next();
       let lo = 0, hi = 100;
       while (lo < hi) { const mid = (lo + hi) >> 1; if (cdf[mid] < r) lo = mid + 1; else hi = mid; }
@@ -446,12 +491,12 @@ export class Simulation {
 
     for (let k = 0; k < N; k++) {
       const s = A.alloc(0);
-      const age = sampleAge();
+      const f = pickFaith();
+      A.faith[s] = f;
+      const age = sampleAge(f);
       A.birth[s] = -Math.round(age * 12);
       const male = rng.next() < 0.5 ? 1 : 0;
       A.sex[s] = male;
-      const f = pickFaith();
-      A.faith[s] = f;
       const st = pickSettlement(f);
       A.home[s] = st;
       this.world.place(rng, st, pos);
@@ -469,7 +514,7 @@ export class Simulation {
       A.looks[s] = u8(0.5 + 0.16 * nrm());
       // education by cohort
       const cohortEdu = Math.max(0, P.education - 0.11 * Math.max(0, age - 30) * (1 - dev * 0.7) * (P.education / 12));
-      let finalEdu = clamp(cohortEdu + 3 * nrm() + 4 * (cog - 0.5), 0, 21);
+      let finalEdu = clamp(cohortEdu + (P.faiths[f].eduGap ?? 0) + 3 * nrm() + 4 * (cog - 0.5), 0, 21);
       if (!male) finalEdu *= 1 - 0.35 * (1 - ge);
       if (age < 6) A.edu[s] = 0;
       else if (age - 6 < finalEdu && age < 26) { A.edu[s] = age - 6; A.occ[s] = OCC.STUDENT; }
@@ -537,16 +582,19 @@ export class Simulation {
     }
     // ---- children → mothers ----
     const womenByAge: number[][] = adultsByAge.map((list) => list.filter((s) => A.sex[s] === 0));
+    const womenByAgeFaith: number[][][] = P.faiths.map((_, f) => womenByAge.map((list) => list.filter((s) => A.faith[s] === f)));
     for (const c of children) {
       const ca = (-A.birth[c]) / 12;
       let mother = -1;
-      for (let tries = 0; tries < 8 && mother < 0; tries++) {
-        const ma = Math.round(ca + 19 + rng.next() * 18);
+      for (let tries = 0; tries < 14 && mother < 0; tries++) {
+        // mothers are older where women study longer
+        const ma = Math.round(ca + 18 + 4 * dev + rng.next() * 17);
         if (ma > 100) continue;
-        const list = womenByAge[ma];
+        // prefer a mother of the child's own faith (keeps each group's age structure)
+        const list = tries < 10 ? womenByAgeFaith[A.faith[c]][ma] : womenByAge[ma];
         if (!list.length) continue;
         const m = list[rng.int(list.length)];
-        if (A.kids[m] >= 7) continue;
+        if (A.kids[m] >= 8) continue;
         mother = m;
       }
       if (mother < 0) continue;
@@ -573,7 +621,7 @@ export class Simulation {
       if (age < 18) { A.wealth[s] = 0; continue; }
       const o = A.occ[s];
       const om = o === OCC.ELITE ? 6 : o === OCC.OWNER ? 2.5 : o === OCC.PROFESSIONAL ? 1.4 : o === OCC.LABORER ? 0.6 : o === OCC.UNEMPLOYED ? 0.3 : o === OCC.RETIRED ? 1.2 : 1;
-      const w = Math.exp(sigma * nrm() - sigma * sigma / 2) * om * (0.4 + Math.min(1.6, age / 40));
+      const w = Math.exp(sigma * nrm() - sigma * sigma / 2) * om * (0.4 + Math.min(1.6, age / 40)) * (P.faiths[A.faith[s]].wealthRatio ?? 1);
       A.wealth[s] = rng.next() < 0.08 ? -w * 0.1 : w;
       wsum += A.wealth[s];
       nAdults++;
@@ -591,6 +639,7 @@ export class Simulation {
     this.rebuildGrid();
     this.aggregateCellsOnly();
     this.seedAspirants();
+    this.faithStart.set(this.faithShareNow);
     // ---- initial economy calibration (after elites exist) ----
     let leff = 0, emp = 0, pw = 0;
     for (let s = 0; s < A.n; s++) {
@@ -611,6 +660,7 @@ export class Simulation {
     this.addNews(`${this.cfg.society.name} begins in ${this.cfg.society.startYear}: ${compactInt(A.live)} people, ${this.S.regimeLabel.toLowerCase()}.`, 'society', 1);
     this.computeQuantiles(false);
     this.collectStats(true);
+    for (let k = 0; k < CAMPS.length; k++) this.campStart[k] = this.latest['camp' + k] ?? 0;
   }
 
   private lastLeff = 1;
@@ -694,7 +744,8 @@ export class Simulation {
       if (A.faith[a] !== A.faith[b]) {
         const lo = A.relig[a] < A.relig[b] ? a : b;
         const hi = lo === a ? b : a;
-        if (this.rng.next() < 0.1 + 0.35 * (A.relig[hi] - A.relig[lo]) + 0.15 * this.S.collectivism) this.convert(lo, A.faith[hi]);
+        const p = (0.1 + 0.35 * (A.relig[hi] - A.relig[lo]) + 0.15 * this.S.collectivism) * (1.25 - this.fRet[A.faith[lo]]) * (0.7 + 0.6 * this.fOut[A.faith[hi]]);
+        if (this.rng.next() < p) this.convert(lo, A.faith[hi]);
       }
       if (A.flags[a] & F.FOLLOW) this.log(a, `Married ${personName(A.uid[b], A.sex[b])}.`);
       if (A.flags[b] & F.FOLLOW) this.log(b, `Married ${personName(A.uid[a], A.sex[a])}.`);
@@ -705,6 +756,8 @@ export class Simulation {
     const A = this.A;
     if (A.faith[s] === f) return;
     const from = this.cfg.population.faiths[A.faith[s]].name;
+    this.flows[A.faith[s] * 6 + 3]++;
+    this.flows[f * 6 + 2]++;
     A.faith[s] = f;
     this.acc.conversions++;
     if (this.cfg.population.faiths[f].secular) A.relig[s] = Math.min(A.relig[s], 0.1);
@@ -791,10 +844,14 @@ export class Simulation {
     }
     A.permute(order, count);
     this.estate.fill(0);
+    this.singles.fill(-1);
     this.compactions++;
   }
 
   compactions = 0;
+  /** Per faith and sex: a ring of recently seen single adults, used for matchmaking. */
+  private singles = new Int32Array(MAX_FAITHS * 2 * SINGLES).fill(-1);
+  private singlesPos = new Int32Array(MAX_FAITHS * 2);
 
   tick() {
     this.t++;
@@ -958,6 +1015,8 @@ export class Simulation {
     this.honeymoon = Math.max(0, 0.15 * (1 - (this.t - S.regimeSince) / 30));
     this.meanSocial = this.latest.social ?? 0.5;
     this.meanEcon = this.latest.econ ?? 0.5;
+    this.meanAuth = this.latest.auth ?? 0.5;
+    this.meanPatriot = this.latest.patriot ?? 0.5;
     this.ustar = clamp(0.12 + 0.75 * S.dev, 0.1, 0.88);
     // war
     this.warCasualty = S.warActive ? 0.0035 * Math.min(2, this.warMobilTarget / 0.2) : 0;
@@ -1015,7 +1074,7 @@ export class Simulation {
   private institutionsDrift() {
     const S = this.S;
     // contraception spreads with development and women's status
-    const cTarget = clamp01(0.05 + 0.85 * S.dev + 0.2 * S.genderEquality - 0.05);
+    const cTarget = contraceptionTarget(S.dev, S.genderEquality, this.cfg.society.familyPlanning);
     S.contraception += (cTarget - S.contraception) / 240;
     // education & health spending slowly follow development (states invest as they grow)
     S.eduAccess += (Math.max(S.eduAccess, 0.2 + 0.75 * S.dev) - S.eduAccess) / 600;
@@ -1050,7 +1109,8 @@ export class Simulation {
     S.progressivity = mv(S.progressivity, clamp01(0.15 + 0.75 * (1 - r.econ)));
     S.welfare = mv(S.welfare, clamp01((0.05 + 0.85 * (1 - r.econ)) * (0.3 + 0.7 * S.dev)));
     S.marketFreedom = mv(S.marketFreedom, clamp01(0.15 + 0.8 * r.econ));
-    S.genderEquality = mv(S.genderEquality, clamp01(0.1 + 0.85 * r.social));
+    // women's status follows the government, but also the culture and the economy
+    S.genderEquality = mv(S.genderEquality, clamp01(0.05 + 0.4 * r.social + 0.35 * this.meanSocial + 0.25 * S.dev));
     S.military = mv(S.military, clamp01(0.15 + 0.6 * r.patriot));
     S.policing = mv(S.policing, clamp01(0.25 + 0.5 * r.auth));
     const favorTarget = r.relig > 0.75 ? 0.25 : 0;
@@ -1481,7 +1541,7 @@ export class Simulation {
       let pe = emigX / 12;
       if (birthday && age < 60) {
         const unhappy = 1 - A.happy[i];
-        pe += 0.006 * unhappy * unhappy * 4 * (0.5 + A.O[i] / 255) * (0.4 + A.edu[i] / 14) * (1 + 2 * A.fear[i]) * (S.warActive ? 2 : 1) * (this.isMinority(f) ? 1 + S.minorityBias : 1) * (S.dev > 0.85 ? 0.3 : 1);
+        pe += 0.0025 * unhappy * unhappy * 4 * (0.5 + A.O[i] / 255) * (0.4 + A.edu[i] / 14) * (1 + 2 * A.fear[i]) * (S.warActive ? 2 : 1) * (this.isMinority(f) ? 1 + S.minorityBias : 1) * (S.dev > 0.85 ? 0.3 : 1);
       }
       if (pe > 0 && rng.next() < pe) {
         this.emigrate(i);
@@ -1500,7 +1560,7 @@ export class Simulation {
     // ---------------- school, work, life stage ----------------
     if (o === OCC.CHILD) {
       if (age >= 6 && age < 7 && birthday) {
-        const acc = clamp01(0.2 + 0.8 * S.eduAccess + 0.1 * (this.parentSES(i) - 0.5)) * (male ? 1 : 1 - 0.4 * (1 - S.genderEquality));
+        const acc = clamp01(0.3 + 0.85 * S.eduAccess + 0.1 * (this.parentSES(i) - 0.5)) * (male ? 1 : 1 - 0.5 * (1 - S.genderEquality) * (1.2 - S.eduAccess));
         if (rng.next() < acc) A.occ[i] = o = OCC.STUDENT;
       } else if (age >= 14) {
         o = this.enterLabour(i, male);
@@ -1509,10 +1569,12 @@ export class Simulation {
       A.edu[i] += 1 / 12;
       if (birthday) {
         const e = A.edu[i];
-        let p = 0.97;
-        const cog = A.cog[i] / 255, C = A.C[i] / 255, ses = this.parentSES(i);
-        const girl = male ? 1 : 1 - 0.4 * (1 - S.genderEquality);
         const E = S.eduAccess, dev = S.dev;
+        // between the main transitions, some pupils drop out: many in poor countries, few where schooling is universal
+        let p = 1 - 0.035 * (1 - E * (0.4 + 0.6 * dev));
+        const cog = A.cog[i] / 255, C = A.C[i] / 255, ses = this.parentSES(i);
+        // girls lose out where schooling is scarce and women's status low
+        const girl = male ? 1 : 1 - 0.5 * (1 - S.genderEquality) * (1.2 - E);
         if (e >= 5.5 && e < 6.5) p = clamp01(0.2 + 0.85 * E * (0.6 + 0.4 * dev) + 0.25 * (cog - 0.5) + 0.2 * (ses - 0.5)) * girl;
         else if (e >= 8.5 && e < 9.5) p = clamp01(0.1 + 0.85 * E * (0.5 + 0.5 * dev) + 0.4 * (cog - 0.5) + 0.2 * (C - 0.5) + 0.2 * (ses - 0.5)) * girl;
         else if (e >= 11.5 && e < 12.5) p = clamp01(-0.05 + 0.75 * E * (0.3 + 0.7 * dev) + 0.8 * (cog - 0.5) + 0.25 * (C - 0.5) + 0.25 * (ses - 0.5)) * girl;
@@ -1546,9 +1608,9 @@ export class Simulation {
         const m = A.deref(A.mother[i]);
         if (m >= 0 && Math.abs(A.x[m] - A.x[i]) < 2 && Math.abs(A.y[m] - A.y[i]) < 2) this.relocate(i, A.home[i]);
       }
-      // faith change: apostasy, return to faith, conversion
-      if (age >= 16) this.faithDrift(i);
     }
+    // faith change: leaving, joining, converting (yearly)
+    if (birthday && age >= 16) this.faithDrift(i, age);
     if (o === OCC.PRISONER && rng.next() < 1 / 30) { A.occ[i] = o = OCC.UNEMPLOYED; this.log(i, 'Was released from prison.'); }
 
     // ---------------- labour market (monthly) ----------------
@@ -1632,6 +1694,18 @@ export class Simulation {
     // ---------------- protest, crime, extremism ----------------
     if (age >= 15) this.civic(i, age, o, protNet, seedX, crimeX, male);
     if (!A.alive[i]) return;
+
+    // ---------------- matchmaking ----------------
+    // Families and congregations introduce singles of the same faith, also across town. Without
+    // this, small endogamous minorities would rarely meet a suitable partner by chance.
+    if (p < 0 && age >= 18 && age < 40 && A.deref(A.partner[i]) < 0) {
+      const sb = (f * 2 + A.sex[i]) * SINGLES;
+      if (rng.next() < 0.1) this.singles[sb + (this.singlesPos[f * 2 + A.sex[i]]++ & (SINGLES - 1))] = A.ref(i);
+      // the scarcer the group locally, the more the community has to help
+      const cn = this.cN[c];
+      const scarce = cn > 0 ? 1 - this.cFaith[c * MAX_FAITHS + f] / cn : 0.5;
+      if (rng.next() < 0.04 * scarce * (0.25 + this.fEndo[f]) * (0.5 + S.collectivism) * (age < 30 ? 1 : 0.5)) this.matchmake(i, age, male, f);
+    }
 
     // ---------------- family: bond, divorce, fertility ----------------
     if (p >= 0) this.partnership(i, p, pov);
@@ -1827,10 +1901,12 @@ export class Simulation {
     const prestige = OCC_PRESTIGE[A.occ[j]] + 0.25 * (A.E[j] / 255) + (A.flags[j] & F.LEADER ? 1.5 : 0);
     const w = 0.045 * tie * mall * prestige;
     if (d < eps) {
-      A.social[i] += w * (A.social[j] - A.social[i]);
-      A.econ[i] += w * (A.econ[j] - A.econ[i]);
-      A.auth[i] += w * (A.auth[j] - A.auth[i]);
-      A.patriot[i] += w * (A.patriot[j] - A.patriot[i]);
+      // political views move less than mood or faith practice: people keep their own minds
+      const wo = 0.35 * w;
+      A.social[i] += wo * (A.social[j] - A.social[i]);
+      A.econ[i] += wo * (A.econ[j] - A.econ[i]);
+      A.auth[i] += wo * (A.auth[j] - A.auth[i]);
+      A.patriot[i] += wo * (A.patriot[j] - A.patriot[i]);
       A.consum[i] += w * (A.consum[j] - A.consum[i]);
       A.itrust[i] += 0.5 * w * (A.itrust[j] - A.itrust[i]);
       A.toler[i] += 0.5 * w * (A.toler[j] - A.toler[i]);
@@ -1877,6 +1953,36 @@ export class Simulation {
     if (slot2 >= 0) A.friends[bj + slot2] = ri;
   }
 
+  /** A same-faith introduction from the community's board of single adults. */
+  private matchmake(i: number, age: number, male: boolean, f: number) {
+    const A = this.A;
+    const rng = this.rng;
+    const sb = (f * 2 + (male ? 0 : 1)) * SINGLES;
+    for (let k = 0; k < 6; k++) {
+      const j = A.deref(this.singles[sb + rng.int(SINGLES)]);
+      if (j < 0 || j === i || A.faith[j] !== f || A.sex[j] === A.sex[i] || A.deref(A.partner[j]) >= 0) continue;
+      const aj = (this.t - A.birth[j]) / 12;
+      const gap = male ? age - aj : aj - age;
+      if (aj < 17 || gap < -4 || gap > 10) continue;
+      if (A.mother[i] >= 0 && A.mother[i] === A.mother[j]) continue;
+      if (A.mother[i] === A.ref(j) || A.father[i] === A.ref(j) || A.mother[j] === A.ref(i) || A.father[j] === A.ref(i)) continue;
+      if (rng.next() > this.readiness(i, age) * this.readiness(j, aj)) continue;
+      this.marry(i, j, clamp01(0.45 + 0.3 * rng.next()));
+      return;
+    }
+  }
+
+  /**
+   * Schooling postpones partnership, for women especially (the main route from education to later,
+   * smaller families), except in devout communities that keep early marriage as a norm.
+   */
+  private readiness(i: number, age: number): number {
+    const A = this.A;
+    const e = Math.min(16, A.edu[i]) * (1 - 0.5 * A.strict[i] * A.relig[i]);
+    const ready = A.sex[i] === 1 ? 18 + 0.5 * e : 15 + 0.75 * e;
+    return age >= ready ? 1 : 0.25;
+  }
+
   private romance(i: number, j: number, age: number, male: boolean, d: number, sameFaith: boolean) {
     const A = this.A;
     const S = this.S;
@@ -1890,43 +1996,74 @@ export class Simulation {
     if (A.mother[i] === A.ref(j) || A.father[i] === A.ref(j) || A.mother[j] === A.ref(i) || A.father[j] === A.ref(i)) return;
     let compat = 0.3 * (A.looks[j] / 255) + 0.2 * (1 - Math.abs(A.edu[i] - A.edu[j]) / 16) + 0.25 * (1 - d) + 0.15 * ((A.A[j] + A.emp[j]) / 510) + 0.1 * rng.next();
     if (!sameFaith) {
-      const block = Math.max(A.relig[i], A.relig[j]) * (1 - Math.min(A.toler[i], A.toler[j])) * (0.6 + 0.4 * S.collectivism);
+      const endo = Math.max(this.fEndo[A.faith[i]], this.fEndo[A.faith[j]]) * (0.4 + 0.6 * Math.max(A.relig[i], A.relig[j]));
+      const block = Math.max(endo, Math.max(A.relig[i], A.relig[j]) * (1 - Math.min(A.toler[i], A.toler[j])) * (0.6 + 0.4 * S.collectivism));
       compat *= 1 - Math.min(0.95, block * 1.3);
     }
     const urgency = age < 22 ? 0.6 + 0.6 * S.collectivism : age < 35 ? 1 : age < 45 ? 0.6 : 0.3;
-    const pm = 0.07 * compat * compat * urgency * (0.7 + 0.6 * S.collectivism);
+    const pm = 0.07 * compat * compat * urgency * (0.7 + 0.6 * S.collectivism) * this.readiness(i, age) * this.readiness(j, aj);
     if (rng.next() < pm) this.marry(i, j, clamp01(0.4 + 0.5 * compat + 0.1 * rng.normal()));
   }
 
-  private faithDrift(i: number) {
+  private faithDrift(i: number, age: number) {
     const A = this.A;
     const S = this.S;
     const rng = this.rng;
     const f = A.faith[i];
-    const fg = this.cfg.population.faiths[f];
-    const freedom = S.religiousPolicy === 'theocracy' && f === S.favoredFaith ? 0.1 : 1;
-    if (!fg.secular && this.secularFaith >= 0 && A.relig[i] < 0.22 && rng.next() < 0.05 * freedom * (0.22 - A.relig[i]) / 0.22 * (0.4 + this.meanSocial)) this.convert(i, this.secularFaith);
-    else if (fg.secular && A.relig[i] > 0.3 && rng.next() < 0.2 * (A.relig[i] - 0.3) / 0.7 + 0.01) {
-      // return to faith: join the faith of a parent, partner or the neighbourhood majority
-      const p = A.deref(A.partner[i]);
-      const m = A.deref(A.mother[i]);
-      let nf = p >= 0 && !this.cfg.population.faiths[A.faith[p]].secular ? A.faith[p] : m >= 0 && !this.cfg.population.faiths[A.faith[m]].secular ? A.faith[m] : -1;
-      if (nf < 0) {
-        const c = A.cell[i];
-        let bv = 0;
-        for (let k = 0; k < this.K; k++) if (k !== this.secularFaith && this.cFaith[c * MAX_FAITHS + k] > bv) { bv = this.cFaith[c * MAX_FAITHS + k]; nf = k; }
+    const faiths = this.cfg.population.faiths;
+    const fg = faiths[f];
+    // apostasy is dangerous under theocracy and costly in tight-knit, collectivist societies
+    const freedom = (S.religiousPolicy === 'theocracy' && f === S.favoredFaith ? 0.1 : 1) * (1.2 - 0.6 * S.collectivism);
+    // Most switching happens between 15 and 35 (Pew 2022, "Modeling the Future of Religion in America").
+    // The yearly rate follows each group's retention, scaled by how lukewarm the person is
+    // relative to their group and by how secular and individualist the society is.
+    const young = age < 35 ? 1 : 0.15;
+    if (!fg.secular) {
+      const lukewarm = (1 - A.relig[i]) / Math.max(0.15, 1 - this.fMeanRelig[f]);
+      const pOut = 0.045 * (1 - this.fRet[f]) * young * lukewarm * (0.6 + 0.8 * this.meanSocial) * freedom;
+      if (rng.next() < pOut) {
+        // most leavers become "nones" where that is socially possible; others move to a more active faith
+        const toNone = this.secularFaith >= 0 && rng.next() < 0.5 + 0.6 * this.meanSocial;
+        const nf = toNone ? this.secularFaith : this.attractiveFaith(i, f);
+        // joining another faith takes a community that seeks converts
+        if (nf >= 0 && (toNone || rng.next() < 0.1 + this.fOut[nf])) { this.convert(i, nf); if (!toNone) A.relig[i] = Math.max(A.relig[i], 0.5); }
       }
-      if (nf >= 0) this.convert(i, nf);
-    } else if (!fg.secular && A.relig[i] < 0.4 && rng.next() < 0.004) {
-      // persuasion by devout friends of another faith
+    } else {
+      const seeker = A.relig[i] / Math.max(0.1, this.fMeanRelig[f]);
+      const pIn = 0.04 * (1 - this.fRet[f]) * young * Math.min(3, seeker) * (1.6 - 0.8 * this.meanSocial - 0.4 * (1 - S.collectivism));
+      if (rng.next() < Math.max(0, pIn)) {
+        // join the faith of a partner or parent, or the most active faith around them
+        const p = A.deref(A.partner[i]);
+        const m = A.deref(A.mother[i]);
+        const nf = p >= 0 && !faiths[A.faith[p]].secular ? A.faith[p] : m >= 0 && !faiths[A.faith[m]].secular ? A.faith[m] : this.attractiveFaith(i, f);
+        if (nf >= 0) { this.convert(i, nf); A.relig[i] = Math.max(A.relig[i], 0.45); }
+      }
+    }
+    // persuasion by devout friends of another faith, depending on that faith's outreach
+    if (A.faith[i] === f && A.relig[i] < 0.5 && rng.next() < 0.05 * young) {
       for (let k = 0; k < FRIEND_SLOTS; k++) {
         const j = A.deref(A.friends[i * FRIEND_SLOTS + k]);
-        if (j >= 0 && A.faith[j] !== f && !this.cfg.population.faiths[A.faith[j]].secular && A.relig[j] > 0.7) { this.convert(i, A.faith[j]); break; }
+        if (j >= 0 && A.faith[j] !== f && !faiths[A.faith[j]].secular && A.relig[j] > 0.7) {
+          if (rng.next() < 0.3 * this.fOut[A.faith[j]] * (1.3 - this.fRet[f]) * freedom) { this.convert(i, A.faith[j]); A.relig[i] = Math.max(A.relig[i], 0.55); }
+          break;
+        }
       }
     }
     // state suppression or enforcement of religion
     if (S.religiousPolicy === 'suppress') A.relig[i] -= 0.01 * A.relig[i];
     if (S.religiousPolicy === 'theocracy' && f === S.favoredFaith) A.strict[i] += 0.01 * (1 - A.strict[i]);
+  }
+
+  /** The other religious group a seeker is most likely to join: weighted by local presence and outreach. */
+  private attractiveFaith(i: number, exclude: number): number {
+    const c = this.A.cell[i];
+    let best = -1, bv = 0;
+    for (let k = 0; k < this.K; k++) {
+      if (k === exclude || this.cfg.population.faiths[k].secular) continue;
+      const v = (this.cFaith[c * MAX_FAITHS + k] + 2 * this.faithShareNow[k]) * (0.2 + this.fOut[k]) * (0.5 + this.rng.next());
+      if (v > bv) { bv = v; best = k; }
+    }
+    return best;
   }
 
   /** Community norms, media, state propaganda, social media and charismatic leaders. Returns social disapproval felt. */
@@ -1940,7 +2077,14 @@ export class Simulation {
     const cn = this.cN[c];
     if (cn > 3) {
       const inv = 1 / cn;
-      const cs = this.cSocial[c] * inv, cr = this.cRelig[c] * inv, cp = this.cPatriot[c] * inv, cc = this.cConsum[c] * inv, ct = this.cToler[c] * inv;
+      let cs = this.cSocial[c] * inv, cr = this.cRelig[c] * inv;
+      const cp = this.cPatriot[c] * inv, cc = this.cConsum[c] * inv, ct = this.cToler[c] * inv;
+      // close-knit faith communities are their members' main reference group, not just the neighbours
+      const f = A.faith[i];
+      const inward = this.fEndo[f] * (this.cfg.population.faiths[f].secular ? 0.3 : 0.7);
+      // the group's norm: what members practise now, held in place by its institutions and teaching
+      cr += inward * (0.5 * (this.fMeanRelig[f] + this.fNormRelig[f]) - cr);
+      if (this.fMeanSocial[f] === this.fMeanSocial[f]) cs += 0.6 * inward * (this.fMeanSocial[f] - cs);
       const conf = 0.006 * (0.3 + 0.9 * S.collectivism) * (1.2 - O) * mall;
       A.social[i] += conf * (cs - A.social[i]);
       A.relig[i] += conf * 0.7 * (cr - A.relig[i]);
@@ -1982,6 +2126,40 @@ export class Simulation {
       A.griev[i] += 0.0008 * A.griev[i];
       A.mental[i] -= 0.0006 * (A.N[i] / 255);
       A.toler[i] -= 0.00012;
+    }
+    // Views settle in the "impressionable years" and then change slowly (Krosnick & Alwin 1989;
+    // Ghitza & Gelman 2014). Until 25 they lean toward the group's norms plus personality and
+    // economic position (openness goes with liberal social views, conscientiousness and wealth with
+    // conservative and pro-market ones: Gerber et al. 2010); afterwards adults are pulled back toward
+    // the views they formed. Idiosyncratic experience adds small noise, so a society never collapses
+    // into one opinion (Mäs, Flache & Helbing 2010).
+    if (age >= 14) {
+      if (age < 25 || A.coreS[i] === 0) {
+        const C = A.C[i] / 255;
+        const fi = A.faith[i];
+        const ms = this.fMeanSocial[fi] === this.fMeanSocial[fi] ? this.meanSocial + this.fEndo[fi] * 0.6 * (this.fMeanSocial[fi] - this.meanSocial) : this.meanSocial;
+        const ancS = ms + 0.7 * (O - 0.5) - 0.4 * (C - 0.5) + 0.5 * (hash01(A.uid[i], 41) - 0.5);
+        const ancE = this.meanEcon + 0.4 * (this.pct(this.wealthQ, A.wealth[i]) - 0.5) + 0.3 * (C - 0.5) + 0.5 * (hash01(A.uid[i], 43) - 0.5);
+        const ancA = this.meanAuth + 0.5 * (C - 0.5) - 0.5 * (O - 0.5) + 0.45 * (hash01(A.uid[i], 47) - 0.5);
+        const ancP = this.meanPatriot + 0.3 * (C - 0.5) - 0.3 * (O - 0.5) + 0.45 * (hash01(A.uid[i], 53) - 0.5);
+        A.social[i] += 0.045 * (ancS - A.social[i]);
+        A.econ[i] += 0.045 * (ancE - A.econ[i]);
+        A.auth[i] += 0.04 * (ancA - A.auth[i]);
+        A.patriot[i] += 0.04 * (ancP - A.patriot[i]);
+        A.coreS[i] = 1 + Math.round(clamp01(A.social[i]) * 254);
+        A.coreE[i] = 1 + Math.round(clamp01(A.econ[i]) * 254);
+        A.coreA[i] = 1 + Math.round(clamp01(A.auth[i]) * 254);
+        A.coreP[i] = 1 + Math.round(clamp01(A.patriot[i]) * 254);
+      } else {
+        A.social[i] += 0.015 * ((A.coreS[i] - 1) / 254 - A.social[i]);
+        A.econ[i] += 0.015 * ((A.coreE[i] - 1) / 254 - A.econ[i]);
+        A.auth[i] += 0.012 * ((A.coreA[i] - 1) / 254 - A.auth[i]);
+        A.patriot[i] += 0.012 * ((A.coreP[i] - 1) / 254 - A.patriot[i]);
+      }
+      A.social[i] = clamp01(A.social[i] + (rng.next() - 0.5) * 0.006);
+      A.econ[i] = clamp01(A.econ[i] + (rng.next() - 0.5) * 0.006);
+      A.auth[i] = clamp01(A.auth[i] + (rng.next() - 0.5) * 0.006);
+      A.patriot[i] = clamp01(A.patriot[i] + (rng.next() - 0.5) * 0.006);
     }
     // charismatic leaders
     const L = this.leaderPos;
@@ -2275,22 +2453,37 @@ export class Simulation {
     }
   }
 
+  /** Desired number of children (Bongaarts): religion, values, schooling, child mortality, farming, family-planning norms. */
+  desiredFamilySize(i: number): number {
+    const A = this.A;
+    const S = this.S;
+    const childMort = Math.min(0.5, this.childMu * 4);
+    const d = 2.15 + 1.1 * A.relig[i] + 0.9 * (0.5 - A.social[i]) - 0.06 * A.edu[i] + 3 * childMort + 0.5 * S.collectivism + S.agrarian + this.fFert[A.faith[i]];
+    // family-planning campaigns promote a two-child norm: they pull larger desires down toward it, not below
+    const fp = this.cfg.society.familyPlanning;
+    return fp > 0 && d > 1.6 ? Math.max(1.6, d - 2 * fp) : d;
+  }
+
   private fertility(i: number, age: number, p: number) {
     const A = this.A;
     const S = this.S;
     const rng = this.rng;
     if (this.t - A.lastBirth[i] < 15) return;
     const partnerF = p >= 0 ? 1 : 0.02 + 0.2 * this.meanSocial * (1 - A.relig[i]);
-    const childMort = Math.min(0.5, this.childMu * 4);
-    const desired = 1.55 + 2.2 * A.relig[i] + 0.9 * (0.5 - A.social[i]) - 0.06 * A.edu[i] + 3 * childMort + 0.5 * S.collectivism + 1.4 * S.agrarian;
-    const contra = S.contraception * (0.75 + 0.25 * Math.min(1, A.edu[i] / 12));
-    // Bongaarts: births stop once the desired family size is reached, as far as contraception allows
-    const want = A.kids[i] < Math.max(0, desired + (hash01(A.uid[i], 3) - 0.5)) ? 1 : Math.pow(1 - contra, 1.5);
-    const delay = age < 18 + 0.8 * Math.max(0, A.edu[i] - 9) ? 1 - contra * 0.85 : 1;
+    const desired = this.desiredFamilySize(i);
+    // use of birth control rises with schooling; doctrines against it hold back the devout and strict;
+    // family-planning programmes reach the unschooled too (Bangladesh, India's sterilisation drives)
+    // (and pronatalist groups use less of it)
+    const contra = Math.min(1, S.contraception * (0.45 + 0.55 * Math.min(1, A.edu[i] / 12)) * (1 - 0.3 * A.strict[i] * A.relig[i]) * (1 - 0.15 * Math.max(0, this.fFert[A.faith[i]])) + 0.3 * this.cfg.society.familyPlanning);
+    // Bongaarts: births stop once the desired family size is reached, as far as contraception
+    // allows (the personal threshold desired − U(0,1) makes completed families average `desired`);
+    // before that, some couples use birth control to space births
+    const want = A.kids[i] < Math.max(0, desired - hash01(A.uid[i], 3)) ? 1 - 0.4 * contra : Math.pow(1 - contra, 1.5);
+    const delay = age < Math.min(32, 18 + (1.3 * Math.max(0, A.edu[i] - 8) + 3 * S.dev) * (1 - 0.6 * A.strict[i] * A.relig[i])) ? 1 - contra * 0.85 : 1;
     const shape = FERTILITY_SHAPE[Math.min(6, ((age - 15) / 5) | 0)];
     const econ = 1 - 0.3 * Math.max(0, A.griev[i] - 0.45) - 0.2 * Math.max(0, A.fear[i] - 0.3);
-    // natural fertility: ~0.8 conceptions/yr at peak after a 15-month post-birth gap ≈ 30-month spacing
-    const pYear = 0.8 * shape * want * delay * partnerF * econ * clamp(A.health[i] / expectedHealth(age), 0.3, 1.1);
+    // natural fertility: ~0.62 conceptions/yr at peak after a 15-month post-birth gap ≈ 34-month spacing
+    const pYear = 0.62 * shape * want * delay * partnerF * econ * clamp(A.health[i] / expectedHealth(age), 0.3, 1.1);
     if (rng.next() < pYear / 12) this.birth(i, p);
   }
 
@@ -2311,7 +2504,12 @@ export class Simulation {
     if (fa >= 0) {
       A.father[s] = A.ref(fa);
       A.kids[fa]++;
-      if (A.faith[fa] !== faith && rng.next() < 0.5 + 0.4 * S.collectivism) faith = A.faith[fa];
+      if (A.faith[fa] !== faith) {
+        // patrilineal custom, weighted by how firmly each parent's group passes on its faith
+        const base = 0.5 + 0.4 * S.collectivism;
+        const wf = base * (0.4 + this.fRet[A.faith[fa]]), wm = (1 - base) * (0.4 + this.fRet[faith]);
+        if (rng.next() < wf / (wf + wm)) faith = A.faith[fa];
+      }
     }
     A.faith[s] = faith;
     const both = fa >= 0;
@@ -2324,8 +2522,8 @@ export class Simulation {
     mix(A.A, P.agreeableness, 0.12, 0.45); mix(A.N, P.neuroticism, 0.12, 0.45); mix(A.cog, 0.5, 0.13, 0.5);
     mix(A.emp, P.empathy, 0.12, 0.4); mix(A.aggr, P.aggression + (male ? 0.08 : -0.06), 0.12, 0.4); mix(A.looks, 0.5, 0.14, 0.4);
     const fv = (arr: Float32Array, sd: number) => { arr[s] = clamp01((both ? (arr[m] + arr[fa]) / 2 : arr[m]) + sd * rng.normal()); };
-    fv(A.relig, 0.05); fv(A.strict, 0.05); fv(A.toler, 0.06); fv(A.social, 0.06); fv(A.econ, 0.06); fv(A.auth, 0.06);
-    fv(A.patriot, 0.06); fv(A.consum, 0.06); fv(A.itrust, 0.06); fv(A.strust, 0.06);
+    fv(A.relig, 0.05); fv(A.strict, 0.05); fv(A.toler, 0.06); fv(A.social, 0.1); fv(A.econ, 0.1); fv(A.auth, 0.1);
+    fv(A.patriot, 0.1); fv(A.consum, 0.06); fv(A.itrust, 0.06); fv(A.strust, 0.06);
     if (this.cfg.population.faiths[faith].secular) A.relig[s] = Math.min(A.relig[s], 0.15);
     A.extrem[s] = 0;
     A.health[s] = clamp(0.9 + 0.05 * rng.normal() - 0.2 * (1 - S.H) * rng.next(), 0.2, 1);
@@ -2337,6 +2535,8 @@ export class Simulation {
     const ma = (this.t - A.birth[m]) / 12;
     const mi = Math.min(34, Math.max(0, (ma | 0) - 15));
     this.birthsByAge[mi]++;
+    this.birthsByAgeF[A.faith[m] * 35 + mi]++;
+    this.flows[faith * 6]++;
     if (A.flags[m] & F.FOLLOW) this.log(m, `Gave birth to ${personName(A.uid[s], male)}.`);
     if (fa >= 0 && A.flags[fa] & F.FOLLOW) this.log(fa, `Became a father to ${personName(A.uid[s], male)}.`);
   }
@@ -2348,6 +2548,7 @@ export class Simulation {
     const ai = Math.min(100, Math.max(0, age | 0));
     this.deathsByAge[ai]++;
     this.deathCauses[cause]++;
+    this.flows[A.faith[i] * 6 + 1]++;
     this.acc.deaths++;
     if (cause === DEATH.SUICIDE) this.acc.suicides++;
     if (cause === DEATH.REPRESSION) this.acc.repressionKills++;
@@ -2404,8 +2605,9 @@ export class Simulation {
     this.acc.emigrants++;
     this.log(i, 'Emigrated abroad.');
     const p = A.deref(A.partner[i]);
+    this.flows[A.faith[i] * 6 + 5]++;
     A.kill(i, this.t);
-    if (p >= 0 && this.rng.next() < 0.75) { this.acc.emigrants++; A.kill(p, this.t); }
+    if (p >= 0 && this.rng.next() < 0.75) { this.acc.emigrants++; this.flows[A.faith[p] * 6 + 5]++; A.kill(p, this.t); }
   }
 
   private aggregate(i: number, age: number, ageInt: number, male: boolean) {
@@ -2431,7 +2633,10 @@ export class Simulation {
     if (o === OCC.SOLDIER) { acc.soldiers++; acc.soldierTrust += A.itrust[i]; }
     if (o === OCC.ELITE) acc.elites++;
     if (A.wealth[i] > 0) acc.posWealth += A.wealth[i];
-    if (!male && age >= 15 && age < 50) this.womenByAge[Math.min(34, ageInt - 15)] += 1 / 12;
+    if (!male && age >= 15 && age < 50) {
+      this.womenByAge[Math.min(34, ageInt - 15)] += 1 / 12;
+      this.womenByAgeF[f * 35 + Math.min(34, ageInt - 15)] += 1 / 12;
+    }
     if (age < 18) { acc.children++; return; }
     acc.adults++;
     if (IS_EMPLOYED[o] || o === OCC.UNEMPLOYED) acc.laborForce++;
@@ -2448,7 +2653,8 @@ export class Simulation {
       acc.auth += A.auth[i]; acc.patriot += A.patriot[i]; acc.consum += A.consum[i]; acc.esteem += A.esteem[i]; acc.relig += A.relig[i];
       acc.strict += A.strict[i];
       acc.social2 += A.social[i] * A.social[i]; acc.econ2 += A.econ[i] * A.econ[i];
-      acc.faithN[f]++; acc.faithGriev[f] += A.griev[i]; acc.faithToler[f] += A.toler[i]; acc.faithWealth[f] += A.wealth[i]; acc.faithRelig[f] += A.relig[i];
+      acc.camp[campOf(A.relig[i], A.social[i], A.econ[i], A.auth[i], A.patriot[i])]++;
+      acc.faithN[f]++; acc.faithGriev[f] += A.griev[i]; acc.faithToler[f] += A.toler[i]; acc.faithWealth[f] += A.wealth[i]; acc.faithRelig[f] += A.relig[i]; acc.faithSocial[f] += A.social[i];
       if (age >= 25) { acc.edu25 += A.edu[i]; acc.n25++; }
       if (age >= 20 && age < 30) acc.youth++;
       if (A.deref(A.partner[i]) >= 0) acc.partnered++;
@@ -2539,7 +2745,10 @@ export class Simulation {
     S.protestFrac = acc.protesters / adults;
     S.violentFrac = acc.violent / adults;
     S.infected = acc.infected;
-    for (let f = 0; f < this.K; f++) this.faithShareNow[f] = acc.alive > 0 ? acc.faith[f] / acc.alive : 0;
+    for (let f = 0; f < this.K; f++) {
+      this.faithShareNow[f] = acc.alive > 0 ? acc.faith[f] / acc.alive : 0;
+      if (acc.faithN[f] >= 5) { this.fMeanRelig[f] = acc.faithRelig[f] / acc.faithN[f]; this.fMeanSocial[f] = acc.faithSocial[f] / acc.faithN[f]; }
+    }
     let mj = 0;
     for (let f = 0; f < this.K; f++) if (f !== this.secularFaith && this.faithShareNow[f] > this.faithShareNow[mj]) mj = f;
     if (mj !== this.majorityFaith && this.t > 1 && this.faithShareNow[mj] > this.faithShareNow[this.majorityFaith] + 0.01) {
@@ -2690,6 +2899,8 @@ export class Simulation {
       A.wealth[s] = Math.max(0, (prof?.wealth ?? 0.3) * 3.5 * S.gdppc * Math.exp(0.8 * rng.normal() - 0.32));
       A.occ[s] = OCC.UNEMPLOYED;
       A.flags[s] = F.IMMIGRANT;
+      if (!male) A.kids[s] = Math.round(clamp((age - 20) / 15, 0, 1) * 2.5 * rng.next());
+      this.flows[f * 6 + 4]++;
     }
     if (count > Math.max(50, A.live * 0.004)) this.addNews(`${compactInt(count * this.popScale)} immigrants arrived this month.`, 'society', 1);
   }
@@ -2963,13 +3174,45 @@ export class Simulation {
         let tfr = 0;
         for (let a = 0; a < 35; a++) if (this.womenByAge[a] > 0) tfr += this.birthsByAge[a] / this.womenByAge[a];
         this.tfr = tfr;
+        // fertility by faith group
+        for (let f = 0; f < this.K; f++) {
+          let tf = 0, w = 0;
+          for (let a = 0; a < 35; a++) {
+            const ww = this.womenByAgeF[f * 35 + a];
+            w += ww;
+            if (ww > 0) tf += this.birthsByAgeF[f * 35 + a] / ww;
+          }
+          this.faithTFR[f] = w > 20 ? tf : NaN;
+        }
+        this.flowsLast.set(this.flows);
+        this.flows.fill(0);
+        this.birthsByAgeF.fill(0); this.womenByAgeF.fill(0);
         this.deathsByAge.fill(0); this.exposure.fill(0); this.birthsByAge.fill(0); this.womenByAge.fill(0);
       }
       this.pyramid.male.fill(0); this.pyramid.female.fill(0);
+      // age, schooling and wealth by faith group
+      const K = this.K;
+      const ageHist = new Float64Array(K * 101);
+      const fCount = new Float64Array(K), eduSum = new Float64Array(K), eduN = new Float64Array(K), wSum = new Float64Array(K), wN = new Float64Array(K);
+      let wAll = 0, wAllN = 0;
       for (let i = 0; i < A.n; i++) {
         if (!A.alive[i]) continue;
-        const b = Math.min(20, (((this.t - A.birth[i]) / 12) / 5) | 0);
+        const age = (this.t - A.birth[i]) / 12;
+        const b = Math.min(20, (age / 5) | 0);
         if (A.sex[i]) this.pyramid.male[b]++; else this.pyramid.female[b]++;
+        const f = A.faith[i];
+        ageHist[f * 101 + Math.min(100, age | 0)]++;
+        fCount[f]++;
+        if (age >= 25) { eduSum[f] += A.edu[i]; eduN[f]++; }
+        if (age >= 18) { wSum[f] += A.wealth[i]; wN[f]++; wAll += A.wealth[i]; wAllN++; }
+      }
+      const meanW = wAllN > 0 ? wAll / wAllN : 1;
+      for (let f = 0; f < K; f++) {
+        let cum = 0;
+        this.faithMedianAge[f] = NaN;
+        for (let a = 0; a <= 100; a++) { cum += ageHist[f * 101 + a]; if (cum >= fCount[f] / 2 && fCount[f] > 0) { this.faithMedianAge[f] = a + 0.5; break; } }
+        this.faithEdu[f] = eduN[f] > 0 ? eduSum[f] / eduN[f] : NaN;
+        this.faithWealthRel[f] = wN[f] > 0 && meanW > 0 ? wSum[f] / wN[f] / meanW : NaN;
       }
       let cum = 0;
       const half = acc.alive / 2;
@@ -2986,7 +3229,14 @@ export class Simulation {
     L.lifeExp = this.lifeExp || L.lifeExp || NaN;
     L.tfr = this.tfr || L.tfr || NaN;
     L.medianAge = this.medianAge;
-    for (let f = 0; f < this.K; f++) L['faith' + f] = this.faithShareNow[f];
+    for (let f = 0; f < this.K; f++) {
+      L['faith' + f] = this.faithShareNow[f];
+      L['tfrF' + f] = this.faithTFR[f] || NaN;
+      L['ageF' + f] = this.faithMedianAge[f];
+    }
+    const sampled = Math.max(1, acc.sampled);
+    for (let k = 0; k < CAMPS.length; k++) L['camp' + k] = acc.camp[k] / sampled;
+    L.familyPlanning = this.cfg.society.familyPlanning;
     for (let k = 0; k < S.parties.length; k++) L['party' + k] = S.parties[k].share;
   }
 
@@ -3012,7 +3262,8 @@ export class Simulation {
     if (age < 18) return;
     acc.adults++;
     acc.sampled++;
-    acc.faithN[A.faith[i]]++; acc.faithRelig[A.faith[i]] += A.relig[i];
+    acc.camp[campOf(A.relig[i], A.social[i], A.econ[i], A.auth[i], A.patriot[i])]++;
+    acc.faithN[A.faith[i]]++; acc.faithRelig[A.faith[i]] += A.relig[i]; acc.faithSocial[A.faith[i]] += A.social[i];
     acc.happy += A.happy[i]; acc.health += A.health[i]; acc.mental += A.mental[i]; acc.griev += A.griev[i]; acc.fear += A.fear[i];
     acc.itrust += A.itrust[i]; acc.strust += A.strust[i]; acc.toler += A.toler[i]; acc.social += A.social[i]; acc.econ += A.econ[i];
     acc.auth += A.auth[i]; acc.patriot += A.patriot[i]; acc.consum += A.consum[i]; acc.esteem += A.esteem[i]; acc.relig += A.relig[i];
@@ -3125,6 +3376,7 @@ export class Simulation {
       let v = 0;
       switch (id) {
         case 'faith': v = 1 + A.faith[i]; break;
+        case 'camp': v = (t - A.birth[i]) / 12 >= 18 ? 1 + campOf(A.relig[i], A.social[i], A.econ[i], A.auth[i], A.patriot[i]) : 1 + CAMPS.length; break;
         case 'occupation': v = 1 + A.occ[i]; break;
         case 'age': v = q((t - A.birth[i]) / 12 / 90); break;
         case 'vote': v = (t - A.birth[i]) / 12 >= 18 && A.vote[i] ? A.vote[i] : 0; break;
@@ -3332,6 +3584,7 @@ export class Simulation {
       (this.S.trends as unknown as Record<string, number>)[key.slice(6)] = value as number;
       return;
     }
+    if (key === 'familyPlanning') { this.cfg.society.familyPlanning = value as number; this.latest.familyPlanning = value as number; return; }
     if (key in S) S[key] = value;
     if (key === 'democracy') this.S.regimeLabel = regimeLabelFor(this.S.democracy, this.S.ruling, this.S.regimeLabel);
   }

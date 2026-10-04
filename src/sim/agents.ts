@@ -15,7 +15,7 @@ const F32_FIELDS = [
 ] as const;
 const U8_FIELDS = [
   'alive', 'gen', 'sex', 'faith', 'occ', 'kids', 'O', 'C', 'E', 'A', 'N', 'cog', 'emp',
-  'aggr', 'looks', 'protest', 'vote', 'flags', 'disease',
+  'aggr', 'looks', 'protest', 'vote', 'flags', 'disease', 'coreS', 'coreE', 'coreA', 'coreP',
 ] as const;
 const U16_FIELDS = ['cell', 'home'] as const;
 const I32_FIELDS = ['birth', 'mother', 'father', 'partner', 'lastBirth', 'deathTick', 'uid'] as const;
@@ -43,6 +43,8 @@ export class AgentStore {
   kids!: Uint8Array; O!: Uint8Array; C!: Uint8Array; E!: Uint8Array; A!: Uint8Array; N!: Uint8Array;
   cog!: Uint8Array; emp!: Uint8Array; aggr!: Uint8Array; looks!: Uint8Array; protest!: Uint8Array;
   vote!: Uint8Array; flags!: Uint8Array; disease!: Uint8Array;
+  /** Social, economic, authority and national views formed in youth (1..255; 0 = not yet formed). */
+  coreS!: Uint8Array; coreE!: Uint8Array; coreA!: Uint8Array; coreP!: Uint8Array;
   // Uint16
   cell!: Uint16Array; home!: Uint16Array;
   // Int32

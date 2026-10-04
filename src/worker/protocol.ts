@@ -45,6 +45,20 @@ export interface FrameState {
   S: Pick<SocietyState, 'democracy' | 'ruleOfLaw' | 'pressFreedom' | 'repression' | 'securityLoyalty' | 'marketFreedom' | 'taxRate' | 'progressivity' | 'welfare' | 'eduAccess' | 'healthSpend' | 'military' | 'policing' | 'genderEquality' | 'contraception' | 'minorityBias' | 'immigration' | 'socialMedia' | 'collectivism' | 'religiousPolicy' | 'favoredFaith' | 'H' | 'legitimacy' | 'ruling' | 'regimeLabel' | 'trends' | 'politicsEndogenous' | 'parties' | 'govParties' | 'nextElection' | 'lastElection' | 'headLeader' | 'psi' | 'mmp' | 'emp' | 'sfd' | 'conflict' | 'warActive' | 'epiActive' | 'automation' | 'debtRatio' | 'protestFrac' | 'violentFrac'>;
   faithShares: number[];
   faithStats: { relig: number; griev: number; toler: number; wealth: number; extremists: number }[];
+  /** Per faith group (index = faith): size, demography and growth components per 1,000 members per year. */
+  groups: {
+    members: number[];
+    start: number[];
+    tfr: number[];
+    medianAge: number[];
+    edu: number[];
+    wealth: number[];
+    natural: number[];
+    switching: number[];
+    migration: number[];
+    /** Ideology camp shares when the simulation started. */
+    campStart: number[];
+  };
   events: EventSummary[];
   leaders: Leader[];
   occupations: number[];

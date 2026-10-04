@@ -204,8 +204,8 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; gap: 0; padding: 6px 6px 0; border-bottom: 1px solid var(--line); background: var(--surface); }
 .tab { border: 0; background: transparent; padding: 8px 8px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-weight: 500; font-size: 13px; white-space: nowrap; flex: none; }
 .tab.on { color: var(--fg); border-bottom-color: var(--accent); }
-.panel-body { overflow-y: auto; padding: 12px; }
-.pane { display: grid; gap: 12px; }
+.panel-body { overflow-y: auto; overflow-x: hidden; padding: 12px; min-width: 0; }
+.pane { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
 .card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r); padding: 14px; min-width: 0; }
 .hero-card h2 { font-size: 26px; margin-bottom: 2px; }
 .meters { display: grid; gap: 10px; margin-top: 10px; }
@@ -375,3 +375,22 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ---- Groups tab ---- */
+.groups-table td.pos { color: var(--good); }
+.groups-table td.neg { color: var(--bad); }
+.groups-table td:first-child { white-space: nowrap; }
+.groups-table .bar-label { display: inline-flex; }
+.camp-row { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 40px 64px; }
+.bar-delta { font-size: 11px; color: var(--muted); text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar-delta.pos { color: var(--good); }
+.bar-delta.neg { color: var(--bad); }
+.profiles { display: grid; gap: 14px; }
+.profile { display: grid; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+.profile:last-child { border-bottom: 0; padding-bottom: 0; }
+.faith-demo { border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.faith-demo > summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.faith-demo[open] > summary { color: var(--text); }
+.groups-table td, .groups-table th { white-space: nowrap; }
+.groups-table .two { display: inline-grid; justify-items: end; gap: 2px; }
+.groups-table .two .alt { color: var(--series-2); }
